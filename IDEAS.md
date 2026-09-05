@@ -32,7 +32,8 @@ Backlog, not commitments. Dead ideas stay here marked as such so they are not re
 
 - The `page` IPC verb opens the panel on the first registered bar widget when none is open; `open`/`toggle` go through the shell and pick the focused monitor. With two monitors `page` can open on the other one.
 
-- `screencap -p` on a device with several displays (the foldable emulator) prints a warning ahead of the PNG and picks the first display; `-d <id>` from `dumpsys SurfaceFlinger --display-id` would let the user choose. 1.0 strips the warning and keeps the image.
+- **Foldables act weirdly; come back to them.** Seen on the `Pixel_10_Pro_Fold` AVD (android-37.2-beta3) on 2026-09-05: the emulator window draws the skin misaligned (the inner display over the frame's edge, the hinge along the bottom, a strip of the desktop showing through), `screencap -p` warns about multiple displays and picks the first, and the AVD reports two displays while unfolded. Development moved to the `Medium_Phone` AVD that day. To look at later: which display a screenshot and a recording should target (`-d <id>` from `dumpsys SurfaceFlinger --display-id`), whether the posture (`device_state`) matters to any command, and whether the skin problem is the emulator's or the AVD's.
+- `screencap -p` on a device with several displays (the foldable emulator) prints a warning ahead of the PNG and picks the first display; `-d <id>` would let the user choose. 1.0 strips the warning and keeps the image.
 - A second `ps -A` format: some vendor ROMs print `ps` without the `u0_a` user column, so nothing shows as Running. A `pidof`-based fallback per listed package would be many calls; `dumpsys activity processes` is one.
 - `resolve-activity` on packages with several launcher activities returns one; a picker would need `cmd package query-activities`.
 

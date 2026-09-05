@@ -206,6 +206,6 @@ The IpcHandler "registered but will not be used" warnings for other plugins' tar
 
 ## Roadmap (one session each; details in the plan file)
 
-~~0 survey the marketplace's twelve Android plugins~~ · ~~1 repo docs + Python core (terminal only)~~ (0.1.0) · ~~2 service, bar widget, hub~~ (0.2.0) · ~~3 devices, packages, actions, deep links~~ (0.3.0) · ~~4 toggles, screenshot, screen record~~ (0.4.0) · ~~5 APK manager, send text, tools~~ (0.5.0) · ~~6 settings page, IPC, keybinding docs~~ (0.6.0) · ~~7 release polish~~ (1.0.0) · 8 publish (marketplace, projects page, blog draft)
+~~0 survey the marketplace's twelve Android plugins~~ · ~~1 repo docs + Python core (terminal only)~~ (0.1.0) · ~~2 service, bar widget, hub~~ (0.2.0) · ~~3 devices, packages, actions, deep links~~ (0.3.0) · ~~4 toggles, screenshot, screen record~~ (0.4.0) · ~~5 APK manager, send text, tools~~ (0.5.0) · ~~6 settings page, IPC, keybinding docs~~ (0.6.0) · ~~7 release polish~~ (1.0.0) · 8 publish (marketplace, projects page)
 
 Each session ends with tests green, `omarchy plugin validate` clean, `qmllint` clean, this file updated, a `CHANGELOG.md` entry with the `manifest.json` version bump, and the plan file's Status line appended. Commit only when Costa asks; never push, amend or add co-author trailers.

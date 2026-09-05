@@ -9,7 +9,7 @@ Backlog, not commitments. Dead ideas stay here marked as such so they are not re
 - **Split APKs** (`.apks`, `.xapk`, `adb install-multiple`) in the APK manager. 1.0 installs single `.apk` files.
 - **Recent APK folders** in the folder box (the plan's `recent_apk_dirs`): 0.5.0 prefills the `apkDir` setting and keeps the typed folder only while the page is on the stack. Would be one more list in `state.json`, like the recent deep links.
 - **Logcat for a package that is not running**: 0.5.0 refuses (`pidof` finds nothing) and says to launch it first. Launching it and then following its pid, or `logcat` with a `--regex` on the package name as a fallback, would be friendlier.
-- **scrcpy's window and the emulator's on Hyprland**: the Tools page launches both through `uwsm-app`; the float-and-center rules for the `Emulator` class and scrcpy's `--window-title "Android Dev"` are S7's README material.
+- **scrcpy's window and the emulator's on Hyprland**: the Tools page launches both through `uwsm-app`; the float-and-centre rules for the `Emulator` class and scrcpy's `--window-title "Android Dev"` are in the README since 1.0.0. Done as far as the plugin goes; setting the rules itself would mean writing into `~/.config/hypr`, which it does not do.
 - **Pull shared preferences** (`run-as PKG cat shared_prefs/*.xml`) for a debuggable package; a page under the package's actions.
 - **Global per-action favorites** as on Windows (star "Launch" for every package). Dead, 2026-09-05: replaced by the last package per device and recent deep links.
 - **Keep the panel open after an action** (`keepOpen` on Windows). Dead: the panel stays open by design.

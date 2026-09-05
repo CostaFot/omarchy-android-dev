@@ -1,24 +1,82 @@
 # Android Dev for Omarchy
 
-The Android developer's side of a device, on the [Omarchy](https://omarchy.org) bar: pick a device, pick a package, clear its data, force-stop it, fire a deep link, flip the developer toggles, take a screenshot, start an emulator, follow logcat. No terminal, no Android Studio.
+<img src="preview.png" width="900" alt="the droid in the bar, the hub, a package's actions and the developer toggles">
+
+The Android developer's side of a device, on the [Omarchy](https://omarchy.org) bar: pick a device, pick a package, clear its data, force-stop it, fire a deep link, flip the developer toggles, take a screenshot, record the screen, install an APK, type into a field, start an emulator, mirror with scrcpy, follow logcat. No terminal, no Android Studio.
 
 Started as a port of the Windows [ADB Extension for Command Palette](https://github.com/CostaFot/AdbExtension), the same way [Markets](https://github.com/CostaFot/omarchy-markets) was a port of the Markets extension, and grew into a device hub.
 
-**Work in progress, feature complete.** In the bar: a droid glyph that lights up with a device and dims without one (and turns red with a dot while a recording runs), a notification when a device connects or disconnects, and a hub that shows the selected device with the pages hanging off it. The part that talks to `adb` also works from a terminal. What is left before 1.0 is polish.
+```bash
+omarchy plugin add https://github.com/CostaFot/omarchy-android-dev --enable
+```
 
-## In the panel
+Setting it up from a coding agent? Point it at `~/.config/omarchy/plugins/costafot.android-dev/AGENTS.md`: every setting, IPC verb and helper command, and `bin/omarchy-android-dev` answers in JSON.
 
-- **Devices**: every attached device with its state; Enter selects the one the other pages talk to. With one device there is nothing to pick.
-- **Apps**: the packages on the device, third-party by default (turn on *Show system apps* to see them all), with a filter box, the running and foreground ones on top and the package you last touched above them. Enter opens a package: its version and launcher activity, then Launch, Restart, Kill process, Clear app data, Clear data and restart, Force stop, Open deep link, Uninstall (asks first), Grant all permissions, Revoke all permissions. Each row names the adb command it runs.
-- **Deep link**: type a URL or a deep link and press Enter; the recent ones are listed below and can be fired again. From a package's actions page the link is scoped to that package.
-- **Toggles**: Animations, Show touches, Pointer location, Layout bounds, Airplane mode, Wi-Fi, Mobile data and Bluetooth, each with its current state read from the device; Enter flips it and the row repaints. Each row names the adb command behind it.
-- **Capture**: Screenshot (saved to your Pictures folder, put on the clipboard, shown in a notification) and Start recording. A recording runs on the device (`screenrecord`, three minutes at most) while the row shows the elapsed time and the bar glyph a dot; Enter again stops it, and the mp4 is pulled into your Videos folder, removed from the device and announced. The folders follow Omarchy's own (`OMARCHY_SCREENSHOT_DIR`, `OMARCHY_SCREENRECORD_DIR`, else `~/Pictures` and `~/Videos`) and can be set in the plugin settings.
-- **APKs**: a folder box, prefilled from the *APK folder* setting (`~/Downloads`), lists the `.apk` files in it as you type. Enter on one installs it (`adb install -r -t`, so a debug build marked testOnly installs too) and the row says Installed or quotes adb's `Failure [...]`. *Install all* runs them one after another.
-- **Send text**: type a line and press Enter to have it typed into whatever field has focus on the device, or send the clipboard. Android's `input text` types one line of ASCII; anything else is refused with a plain message rather than typed wrong (a `%s` in the text becomes a space on the device, input's own escape).
-- **Settings**: the adb binary, the screenshot, recording and APK folders, the extra scrcpy arguments, and the four switches (notifications, device notifications, confirm uninstall, show system apps) as a form; Save writes them to your `shell.json` and the plugin takes them at once, no restart. The hub's Settings row names the adb in use and how it was found.
-- **Tools**: *Mirror with scrcpy* (once scrcpy is installed; the *Extra scrcpy arguments* setting is appended), *Logcat* for the package you last touched (`adb logcat --pid=…` in your default terminal; the app has to be running), and one row per emulator AVD showing Running or Stopped: Enter starts a stopped one and, after a confirm, stops a running one. What the Tools page launches is yours to close; the plugin never kills it.
+## In the bar
 
-Every action shows its result in the panel and sends a notification with the device's name. `j`/`k` or the arrows move, Enter runs, Escape or Backspace goes back, `r` reads again.
+<img src="assets/screenshots/bar.png" alt="the droid glyph with a device count of two">
+<img src="assets/screenshots/bar-recording.png" alt="the droid glyph red with a dot while a recording runs">
+
+A droid glyph. Lit with a device, dimmed without one, red while the selected device waits for authorisation or is offline, red with a dot while a screen recording runs. With more than one device the count sits next to it; the tooltip names the selected device and its state.
+
+* Left click opens the panel
+* Middle click reads adb and the devices again
+
+A notification says when a device connects, disconnects or needs authorising (accept the prompt on the phone). "Connects" means *became ready*: an emulator shows up offline for a while first and is announced once it has booted, by its AVD name.
+
+## The panel
+
+<p>
+<img src="assets/screenshots/hub.png" width="300" alt="the hub: the selected device and the pages">
+<img src="assets/screenshots/devices.png" width="300" alt="the device picker with two emulators">
+</p>
+
+It opens on a hub: the selected device with its state, then the pages. Every page hangs off that device. `j`/`k` or the arrows move, Enter runs, `r` reads the page again, Escape or Backspace goes back a page and Escape on the hub closes. Pages with a box (a filter, a URL, a folder, a line of text) start typing at once; `/` puts the caret back in the box.
+
+**Devices** is the picker: every device adb sees, with its kind (USB, emulator, Wi-Fi) and state, the selected one checked. Enter selects the one the other pages talk to. With one device there is nothing to pick and the plugin uses it.
+
+<p>
+<img src="assets/screenshots/apps.png" width="300" alt="the package list with its sections">
+<img src="assets/screenshots/actions.png" width="300" alt="a package's actions">
+</p>
+
+**Apps** lists the packages on the device, third-party by default (*Show system apps* lists them all), with a filter box. The one in the foreground comes first, then the running ones, then the debuggable ones, then the rest; the package you last opened sits on top when the box is empty. Enter opens a package: its version and launcher activity, then Launch, Restart, Kill process, Clear app data, Clear data and restart, Force stop, Open deep link, Uninstall (asks first), Grant all permissions, Revoke all permissions. Each row names the adb command it runs.
+
+<img src="assets/screenshots/deeplink.png" width="300" alt="the deep link page with the typed URL and the recent links">
+
+**Deep link** takes a URL or a custom scheme; Enter fires it (`am start -a android.intent.action.VIEW -d URL`). The last ten are listed under *Recent* and fire again with Enter. From a package's actions page the link is scoped to that package, so an ambiguous scheme lands in the right app.
+
+<img src="assets/screenshots/toggles.png" width="300" alt="the eight developer toggles with their state">
+
+**Toggles** are Animations, Show touches, Pointer location, Layout bounds, Airplane mode, Wi-Fi, Mobile data and Bluetooth, each with its current state read from the device in one call. Enter flips one and every row repaints from the answer. Each row names the adb command behind it.
+
+<p>
+<img src="assets/screenshots/capture.png" width="300" alt="the capture page">
+<img src="assets/screenshots/capture-recording.png" width="300" alt="the capture page while a recording runs">
+</p>
+
+**Capture** has Screenshot (saved to your Pictures folder, put on the clipboard, shown in a notification) and Start recording. A recording runs on the device (`screenrecord`, three minutes at most) while the row counts the seconds and the bar glyph shows a dot; Enter again stops it, and the mp4 is pulled into your Videos folder, removed from the device and announced. The folders follow Omarchy's own (`OMARCHY_SCREENSHOT_DIR`, `OMARCHY_SCREENRECORD_DIR`, else `~/Pictures` and `~/Videos`) and can be set in the plugin settings.
+
+<p>
+<img src="assets/screenshots/apks.png" width="300" alt="the APK folder listing">
+<img src="assets/screenshots/apks-installed.png" width="300" alt="the same folder after Install all">
+</p>
+
+**APKs** is a folder box, prefilled from the *APK folder* setting (`~/Downloads`), listing the `.apk` files in it as you type. Enter on one installs it (`adb install -r -t`, so a debug build marked testOnly installs too) and the row says Installed or quotes adb's `Failure [...]`. *Install all* runs them one after another and sends one notification for the batch.
+
+<img src="assets/screenshots/text.png" width="300" alt="the send text page">
+
+**Send text** types a line into whatever field has focus on the device, or sends the clipboard. Android's `input text` types one line of ASCII; anything else is refused with a plain message rather than typed wrong (a `%s` in the text becomes a space on the device, input's own escape).
+
+<img src="assets/screenshots/tools.png" width="300" alt="the tools page: scrcpy, logcat and the emulators">
+
+**Tools** has *Mirror with scrcpy* (once scrcpy is installed; the *Extra scrcpy arguments* setting is appended), *Logcat* for the package you last opened (`adb logcat --pid=…` in your default terminal; the app has to be running), and one row per emulator AVD showing Running or Stopped: Enter starts a stopped one and, after a confirm, stops a running one. What this page launches is yours to close; the plugin never kills it.
+
+<img src="assets/screenshots/settings.png" width="300" alt="the settings form">
+
+**Settings** is a form: the adb binary, the screenshot, recording and APK folders, the extra scrcpy arguments, and the four switches (notifications, device notifications, confirm uninstall, show system apps). Tab, `j`/`k` and the arrows walk it, Enter edits a field or flips a switch, Save writes what changed to your `shell.json` and the plugin takes it at once, no restart. The hub's Settings row names the adb in use and how it was found.
+
+Every action shows its result in the panel and sends a notification with the device's name.
 
 ## Settings
 
@@ -38,22 +96,16 @@ Saved on the plugin's entry in `~/.config/omarchy/shell.json`, from the panel's 
 
 ## Requirements
 
-`adb`, from the `android-tools` package or the SDK platform-tools. It does not need to be on `PATH`: the plugin looks in `$ANDROID_HOME`, `$ANDROID_SDK_ROOT` and `~/Android/Sdk` too, and a settings key can point at it.
+`adb`, from the `android-tools` package or the SDK platform-tools. It does not need to be on `PATH`: the plugin looks in `$ANDROID_HOME`, `$ANDROID_SDK_ROOT` and `~/Android/Sdk` too, and the `adbPath` setting can point at it.
 
-A device over USB, or an emulator. Wireless debugging is not supported.
-
-## Install
-
-```bash
-omarchy plugin add https://github.com/CostaFot/omarchy-android-dev --enable
-```
+A device over USB with USB debugging on, or an emulator. The Tools page needs the SDK's `emulator` for the AVD rows and the `scrcpy` package for mirroring; both are optional and the rows appear when they are installed, no restart needed.
 
 ## From the shell
 
 ```bash
 omarchy-shell costafot.android-dev help          # the verbs
 omarchy-shell costafot.android-dev toggle        # the hub
-omarchy-shell costafot.android-dev status | jq   # adb, devices, the tracker
+omarchy-shell costafot.android-dev status | jq   # adb, devices, the tracker, the settings in force
 omarchy-shell costafot.android-dev screenshot    # saved, on the clipboard, with a notification
 omarchy-shell costafot.android-dev select emulator-5554
 omarchy-shell costafot.android-dev page packages # open the panel on a page: hub, devices, packages, deeplink, toggles, capture, apks, text, tools, settings
@@ -69,7 +121,7 @@ omarchy-shell costafot.android-dev logcat com.android.chrome   # adb logcat --pi
 
 Every verb returns at once; the result arrives as a notification and in the panel.
 
-## Keybindings and the menu
+## Keybindings, the menu and window rules
 
 Omarchy's bindings live in `~/.config/hypr/bindings.lua`. Two lines give the panel and a screenshot a key (`SUPER + ALT + A` and `SUPER + ALT + C` are free in the defaults; pick others if you use them):
 
@@ -88,8 +140,15 @@ bindd = SUPER ALT, C, Android screenshot, exec, omarchy-shell costafot.android-d
 To put the panel on the Omarchy menu (`SUPER + SPACE`), add a row to `~/.config/omarchy/extensions/omarchy-menu.jsonc`; the second line puts a screenshot row under the Capture submenu:
 
 ```jsonc
-"android": {"icon":"","label":"Android Dev","action":"omarchy-shell costafot.android-dev toggle","description":"Devices, apps, toggles, captures, APKs, emulators"},
-"trigger.capture.android": {"icon":"","label":"Android screenshot","action":"omarchy-shell costafot.android-dev screenshot"},
+"android": {"icon":"","label":"Android Dev","action":"omarchy-shell costafot.android-dev toggle","description":"Devices, apps, toggles, captures, APKs, emulators"},
+"trigger.capture.android": {"icon":"","label":"Android screenshot","action":"omarchy-shell costafot.android-dev screenshot"},
+```
+
+The emulator and scrcpy open as tiled windows, which is rarely what a phone-shaped window wants. Two rules in `~/.config/hypr/hyprland.lua` (after the `require` lines) float and centre them; the emulator's window class is `Emulator` and scrcpy is launched with the window title `Android Dev`:
+
+```lua
+o.window("^(Emulator)$", { float = true, center = true })
+o.window({ class = "^(scrcpy)$", title = "^(Android Dev)$" }, { float = true, center = true })
 ```
 
 ## From a terminal
@@ -118,11 +177,39 @@ Emulators show up by their AVD name, as in `Pixel 10 Pro Fold (emulator-5554)`.
 
 ## How it runs
 
-The plugin never runs `adb` from the shell. A Python 3 helper with no dependencies does, as `/usr/bin/python3` with an argument list, `-s SERIAL` on every device command, a deadline and a size cap on every call. State lives in `~/.local/state/omarchy/costafot.android-dev/`, private to your user. Nothing leaves your machine: `adb` talks to its own server on `127.0.0.1` and to your device. scrcpy, the emulator and the logcat terminal are started detached, the way Omarchy's own launchers start apps, and are never signalled by the plugin; an emulator stops through `adb emu kill`. scrcpy is told to use the same `adb` as the plugin, so a second adb on PATH (the `scrcpy` package installs one) changes nothing.
+The shell never runs `adb` itself. A Python 3 helper with no dependencies does, started as `/usr/bin/python3` with an argument list, never through a shell string; every adb call is an argument list too, with `-s SERIAL` on every device command, a deadline and a size cap on what it reads back, and a child that outruns either is stopped and reported, never parsed. One device tracker (`adb track-devices`) runs per shell and is restarted with backoff when adb goes away. The plugin never kills a process it did not start: scrcpy, the emulator and the logcat terminal are started detached, the way Omarchy's own launchers start apps, and are left alone; an emulator stops through `adb emu kill`. scrcpy is told to use the same `adb` as the plugin, so a second adb on `PATH` (the `scrcpy` package installs one) changes nothing.
 
-## Uninstall
+State lives in `~/.local/state/omarchy/costafot.android-dev/`: the selected device, the last package per device, the recent deep links, a package cache. The directory is private to your user and checked on every run; files are written atomically and read through descriptors that refuse symlinks. Settings live on the plugin's entry in your `shell.json` and nowhere else.
+
+**Leaves your machine:** nothing. `adb` talks to its own server on `127.0.0.1:5037` and to your device; the plugin makes no network request of its own.
+
+## FAQ
+
+**adb is not on my PATH.** It does not have to be. The plugin looks in `$ANDROID_HOME` and `$ANDROID_SDK_ROOT`, then `~/Android/Sdk/platform-tools`, then `PATH`; the hub's Settings row says which one it found. Point `adbPath` at a binary or a folder to be explicit; if that path holds no adb the hub says so instead of quietly using another one.
+
+**The hub says "needs authorising".** The phone is showing the *Allow USB debugging?* prompt; accept it, and tick *Always allow* to skip it next time. If no prompt appears, *Revoke USB debugging authorisations* in the developer options and replug. The glyph stays red and the device pages wait until the device is ready.
+
+**Two devices, and it talks to the wrong one.** Enter on the hub's device row opens the picker. The choice is remembered per serial; when the remembered device is gone and one other is attached, that one is used. Over IPC and from a terminal, `select SERIAL` or `--serial SERIAL` does the same.
+
+**No wireless debugging?** Pairing and connecting are not in the plugin: it drives what adb sees over USB and the emulators. A device you connected yourself (`adb connect`) shows up in the picker like any other, tagged Wi-Fi.
+
+**Send text refuses my text.** Android's `input text` takes one line of printable ASCII, so accents, emoji and line breaks are refused rather than typed wrong. Apps such as ADBKeyboard accept UTF-8 through a broadcast; that needs an APK on the device and is not built in.
+
+**Typing and taps do nothing on my phone.** Some vendor ROMs block input injection over adb until *USB debugging (Security settings)* is enabled in the developer options. For scrcpy the usual answer is `--keyboard=uhid --mouse=uhid`, which go in the *Extra scrcpy arguments* setting.
+
+**A recording was running when the shell restarted.** The device finishes the file on its own; it stays at `/sdcard/omarchy-android-dev-<stamp>.mp4` and the plugin does not pull leftovers. `adb pull` it and remove it by hand.
+
+**What is different from the Windows extension?** Global per-action favourites are replaced by the last package per device and the recent deep links. The panel stays open after an action. Installs pass `-t` so debug builds install. A package with only a service process counts as Running. Uninstall asks first, and can be told not to.
+
+## Update and uninstall
+
+```bash
+omarchy plugin update costafot.android-dev
+```
 
 ```bash
 omarchy plugin remove costafot.android-dev
 rm -rf ~/.local/state/omarchy/costafot.android-dev
 ```
+
+Ideas for later, and what was left out on purpose, are in `IDEAS.md`.

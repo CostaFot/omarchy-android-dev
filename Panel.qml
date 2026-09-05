@@ -880,8 +880,11 @@ Panel {
   // ---- Actions ------------------------------------------------------------
   // Everything that touches the device goes through the service, which
   // runs the helper and turns the result into a notification as well.
-  function act(args, onDone) {
-    if (service && typeof service.act === "function") service.act(args, onDone)
+  // `silent` reaches the service: a batch install passes it so the one
+  // summary notification is the only one (before 1.0.0 it was dropped here
+  // and Install all sent one per file plus the summary).
+  function act(args, onDone, silent) {
+    if (service && typeof service.act === "function") service.act(args, onDone, silent)
     else if (store) store.run(args, onDone)
   }
 

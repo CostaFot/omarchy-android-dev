@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0
+
+- **Release.** The README has a preview and a screenshot per page, the FAQ (adb off PATH, an unauthorised device, two devices, no wireless pairing, ASCII-only text, vendor ROMs that block input injection, a recording cut by a shell restart, what differs from the Windows extension), Hyprland window rules that float the emulator and scrcpy, and the update line. `preview.png` and `assets/screenshots/` are captured from the panel on the Medium_Phone emulator.
+- Fixed: *Install all* sent one notification per file on top of the batch summary. The panel's `act` wrapper dropped the `silent` flag on its way to the service; it now passes it through, and a batch of three sends exactly one `Installed 3/3 APKs`.
+- Tests: `tests/test_tree.py` pins the tree invariants a marketplace reviewer reads for: every QML `Text` is `Text.PlainText`, the helper spawns children in three named modules only and never through a shell, QML never runs adb, nothing is killed by name, no shared temp dir, and no file in the tree names a privilege-escalation, package-manager, service-manager or clone-and-run command. 144 offline tests.
+- Checked live before tagging: no adb anywhere (the hub's note and the helper's `no_adb`), the adb server killed under the tracker (an `adb_failed` note for five seconds, then the tracker back with the device), a second emulator selected and then killed (the selection falls back to the one device left; connected and disconnected notifications carry the AVD name), a corrupt `state.json` (set aside as `.bak`, reported once, clean on the next run), the bar on the left (the glyph and the panel follow), a package uninstalled behind the open actions page.
+
 ## 0.6.0
 
 - **Settings**: the last hub row is a page. A form with the adb binary, the screenshot, recording and APK folders and the extra scrcpy arguments as text fields, and Notifications, Device notifications, Confirm uninstall and Show system apps as toggles; `j`/`k`, Tab and the arrows walk it, Enter edits a field or flips a toggle, Enter on Save writes the keys that changed in one atomic shell.json update and the running plugin takes them at once (the tracker restarts with the new adb path, the next helper run carries the new folders), no shell restart. The hub's Settings row names the adb in use and how it was found (`~/Android/Sdk/platform-tools/adb · found in ~/Android/Sdk`). `page settings` over IPC opens it.

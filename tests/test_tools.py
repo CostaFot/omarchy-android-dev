@@ -60,6 +60,22 @@ class Launches(FakeAdbCase):
         self.assertEqual(doc["notice"], "scrcpy started: Pixel 10 Pro Fold (emulator-5554)")
         self.assertEqual(self.tool_calls("scrcpy", wait=2), [["-s", SERIAL, "--window-title", "Android Dev", "--keyboard=uhid", "--mouse=uhid"]])
 
+    def test_mirror_screen_off_puts_the_flags_before_the_extra_args(self):
+        """mirrorScreenOff adds --turn-screen-off --stay-awake ahead of
+        scrcpyArgs, so the user's own flags come last; the word "true" over
+        `omarchy bar set` counts too, and the tools payload shows the same."""
+        self.fake_tool("scrcpy", [(None, "", 0, 3)], "OMARCHY_ANDROID_DEV_SCRCPY")
+        doc = self.run_cli("--settings", '{"mirrorScreenOff": "true", "scrcpyArgs": "--keyboard=uhid"}', "tool", "scrcpy")
+        self.assertTrue(doc["ok"], doc)
+        self.assertEqual(doc["argv"], ["-s", SERIAL, "--window-title", "Android Dev", "--turn-screen-off", "--stay-awake", "--keyboard=uhid"])
+        self.assertEqual(self.tool_calls("scrcpy", wait=2), [doc["argv"]])
+        doc = self.run_cli("--settings", '{"mirrorScreenOff": true, "scrcpyArgs": "--keyboard=uhid"}', "tools")
+        self.assertEqual(doc["scrcpy_args"], "--turn-screen-off --stay-awake --keyboard=uhid")
+        self.assertTrue(doc["screen_off"])
+        doc = self.run_cli("--settings", '{"mirrorScreenOff": "false"}', "tools")
+        self.assertEqual(doc["scrcpy_args"], "")
+        self.assertFalse(doc["screen_off"])
+
     def test_scrcpy_missing_or_failing_at_once(self):
         self.assertEqual(self.run_cli("tool", "scrcpy")["error"]["code"], "no_tool")
         self.fake_tool("scrcpy", [(None, "", 2, 0)], "OMARCHY_ANDROID_DEV_SCRCPY")

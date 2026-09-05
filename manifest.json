@@ -32,6 +32,7 @@
       "recordingDir": "",
       "apkDir": "~/Downloads",
       "scrcpyArgs": "",
+      "mirrorScreenOff": false,
       "notify": true,
       "deviceNotifications": true,
       "confirmUninstall": true,
@@ -72,6 +73,13 @@
         "label": "Extra scrcpy arguments",
         "description": "Appended to the scrcpy command line, split on whitespace.",
         "defaultValue": ""
+      },
+      {
+        "key": "mirrorScreenOff",
+        "type": "boolean",
+        "label": "Mirror with the screen off",
+        "description": "scrcpy turns the device's screen off and keeps it awake while mirroring (--turn-screen-off --stay-awake).",
+        "defaultValue": false
       },
       {
         "key": "notify",

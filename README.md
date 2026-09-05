@@ -70,11 +70,11 @@ It opens on a hub: the selected device with its state, then the pages. Every pag
 
 <img src="assets/screenshots/tools.png" width="300" alt="the tools page: scrcpy, logcat and the emulators">
 
-**Tools** has *Mirror with scrcpy* (once scrcpy is installed; the *Extra scrcpy arguments* setting is appended), *Logcat* for the package you last opened (`adb logcat --pid=…` in your default terminal; the app has to be running), and one row per emulator AVD showing Running or Stopped: Enter starts a stopped one and, after a confirm, stops a running one. What this page launches is yours to close; the plugin never kills it.
+**Tools** has *Mirror with scrcpy* (once scrcpy is installed; with *Mirror with the screen off* on, the phone's own screen goes dark and stays awake while the mirror runs, and the *Extra scrcpy arguments* setting is appended), *Logcat* for the package you last opened (`adb logcat --pid=…` in your default terminal; the app has to be running), and one row per emulator AVD showing Running or Stopped: Enter starts a stopped one and, after a confirm, stops a running one. What this page launches is yours to close; the plugin never kills it.
 
 <img src="assets/screenshots/settings.png" width="300" alt="the settings form">
 
-**Settings** is a form: the adb binary, the screenshot, recording and APK folders, the extra scrcpy arguments, and the four switches (notifications, device notifications, confirm uninstall, show system apps). Tab, `j`/`k` and the arrows walk it, Enter edits a field or flips a switch, Save writes what changed to your `shell.json` and the plugin takes it at once, no restart. The hub's Settings row names the adb in use and how it was found.
+**Settings** is a form: the adb binary, the screenshot, recording and APK folders, the extra scrcpy arguments, and the five switches (mirror with the screen off, notifications, device notifications, confirm uninstall, show system apps). Tab, `j`/`k` and the arrows walk it, Enter edits a field or flips a switch, Save writes what changed to your `shell.json` and the plugin takes it at once, no restart. The hub's Settings row names the adb in use and how it was found.
 
 Every action shows its result in the panel and sends a notification with the device's name.
 
@@ -89,6 +89,7 @@ Saved on the plugin's entry in `~/.config/omarchy/shell.json`, from the panel's 
 | `recordingDir` | empty | Where screen recordings go. Empty uses `OMARCHY_SCREENRECORD_DIR`, else your Videos folder. |
 | `apkDir` | `~/Downloads` | Where the APKs page starts looking. |
 | `scrcpyArgs` | empty | Appended to the scrcpy command line, split on whitespace (`--always-on-top --keyboard=uhid`). |
+| `mirrorScreenOff` | `false` | Mirror with the device's screen off: scrcpy gets `--turn-screen-off --stay-awake`, so the phone stays dark and, plugged in, awake while the mirror runs; the screen comes back when scrcpy closes. |
 | `notify` | `true` | Desktop notifications for actions and captures. |
 | `deviceNotifications` | `true` | A notification when a device connects, disconnects or needs authorising. |
 | `confirmUninstall` | `true` | Ask before uninstalling an app. |

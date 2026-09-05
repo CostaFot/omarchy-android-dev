@@ -637,9 +637,10 @@ Panel {
   // cheaply (tests/test_manifest.py pins the copies together, with the
   // helper's and the store's key lists).
   readonly property var settingsDefaults: ({ adbPath: "", screenshotDir: "", recordingDir: "", apkDir: "~/Downloads", scrcpyArgs: "",
-                                             notify: true, deviceNotifications: true, confirmUninstall: true, showSystemApps: false })
+                                             mirrorScreenOff: false, notify: true, deviceNotifications: true, confirmUninstall: true, showSystemApps: false })
   readonly property var settingsTextKeys: ["adbPath", "screenshotDir", "recordingDir", "apkDir", "scrcpyArgs"]
-  readonly property var settingsBoolKeys: ["notify", "deviceNotifications", "confirmUninstall", "showSystemApps"]
+  readonly property var settingsBoolKeys: ["mirrorScreenOff", "notify", "deviceNotifications", "confirmUninstall", "showSystemApps"]
+  property bool pendingMirrorScreenOff: false
   property bool pendingNotify: true
   property bool pendingDeviceNotifications: true
   property bool pendingConfirmUninstall: true
@@ -657,16 +658,18 @@ Panel {
   function settingFlag(key) { return store ? store.flag(key, settingsDefaults[key]) : settingsDefaults[key] }
 
   readonly property var formFields: [adbPathField, screenshotDirField, recordingDirField, apkDirField, scrcpyArgsField]
-  readonly property var formToggles: [notifyToggle, deviceNotificationsToggle, confirmUninstallToggle, showSystemAppsToggle]
+  readonly property var formToggles: [mirrorScreenOffToggle, notifyToggle, deviceNotificationsToggle, confirmUninstallToggle, showSystemAppsToggle]
   readonly property var formControls: formFields.concat(formToggles).concat([saveButton, cancelButton])
 
   function pendingFlag(key) {
-    return key === "notify" ? pendingNotify : key === "deviceNotifications" ? pendingDeviceNotifications
+    return key === "mirrorScreenOff" ? pendingMirrorScreenOff : key === "notify" ? pendingNotify
+      : key === "deviceNotifications" ? pendingDeviceNotifications
       : key === "confirmUninstall" ? pendingConfirmUninstall : pendingShowSystemApps
   }
 
   function setPendingFlag(key, value) {
-    if (key === "notify") pendingNotify = value
+    if (key === "mirrorScreenOff") pendingMirrorScreenOff = value
+    else if (key === "notify") pendingNotify = value
     else if (key === "deviceNotifications") pendingDeviceNotifications = value
     else if (key === "confirmUninstall") pendingConfirmUninstall = value
     else if (key === "showSystemApps") pendingShowSystemApps = value
@@ -1410,6 +1413,20 @@ Panel {
           }
 
           Toggle {
+            id: mirrorScreenOffToggle
+            width: parent.width
+            label: "Mirror with the screen off"
+            description: "scrcpy turns the device's screen off and keeps it awake while it mirrors (--turn-screen-off --stay-awake); the screen comes back when scrcpy closes."
+            checked: root.pendingMirrorScreenOff
+            foreground: root.contentForeground
+            fontFamily: root.contentFontFamily
+            activeFocusOnTab: false
+            hasCursor: root.formCursor === 5
+            onHovered: function(on) { if (on) root.formCursor = 5 }
+            onClicked: { root.formCursor = 5; root.pendingMirrorScreenOff = !root.pendingMirrorScreenOff }
+          }
+
+          Toggle {
             id: notifyToggle
             width: parent.width
             label: "Notifications"
@@ -1418,9 +1435,9 @@ Panel {
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
             activeFocusOnTab: false
-            hasCursor: root.formCursor === 5
-            onHovered: function(on) { if (on) root.formCursor = 5 }
-            onClicked: { root.formCursor = 5; root.pendingNotify = !root.pendingNotify }
+            hasCursor: root.formCursor === 6
+            onHovered: function(on) { if (on) root.formCursor = 6 }
+            onClicked: { root.formCursor = 6; root.pendingNotify = !root.pendingNotify }
           }
 
           Toggle {
@@ -1432,9 +1449,9 @@ Panel {
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
             activeFocusOnTab: false
-            hasCursor: root.formCursor === 6
-            onHovered: function(on) { if (on) root.formCursor = 6 }
-            onClicked: { root.formCursor = 6; root.pendingDeviceNotifications = !root.pendingDeviceNotifications }
+            hasCursor: root.formCursor === 7
+            onHovered: function(on) { if (on) root.formCursor = 7 }
+            onClicked: { root.formCursor = 7; root.pendingDeviceNotifications = !root.pendingDeviceNotifications }
           }
 
           Toggle {
@@ -1446,9 +1463,9 @@ Panel {
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
             activeFocusOnTab: false
-            hasCursor: root.formCursor === 7
-            onHovered: function(on) { if (on) root.formCursor = 7 }
-            onClicked: { root.formCursor = 7; root.pendingConfirmUninstall = !root.pendingConfirmUninstall }
+            hasCursor: root.formCursor === 8
+            onHovered: function(on) { if (on) root.formCursor = 8 }
+            onClicked: { root.formCursor = 8; root.pendingConfirmUninstall = !root.pendingConfirmUninstall }
           }
 
           Toggle {
@@ -1460,9 +1477,9 @@ Panel {
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
             activeFocusOnTab: false
-            hasCursor: root.formCursor === 8
-            onHovered: function(on) { if (on) root.formCursor = 8 }
-            onClicked: { root.formCursor = 8; root.pendingShowSystemApps = !root.pendingShowSystemApps }
+            hasCursor: root.formCursor === 9
+            onHovered: function(on) { if (on) root.formCursor = 9 }
+            onClicked: { root.formCursor = 9; root.pendingShowSystemApps = !root.pendingShowSystemApps }
           }
         }
       }
@@ -1493,8 +1510,8 @@ Panel {
             bordered: true
             foreground: root.contentForeground
             fontFamily: root.contentFontFamily
-            hasCursor: root.formCursor === 9
-            onHovered: function(on) { if (on) root.formCursor = 9 }
+            hasCursor: root.formCursor === 10
+            onHovered: function(on) { if (on) root.formCursor = 10 }
             onClicked: root.saveSettings()
           }
 
@@ -1503,8 +1520,8 @@ Panel {
             text: "Cancel"
             foreground: root.mutedForeground
             fontFamily: root.contentFontFamily
-            hasCursor: root.formCursor === 10
-            onHovered: function(on) { if (on) root.formCursor = 10 }
+            hasCursor: root.formCursor === 11
+            onHovered: function(on) { if (on) root.formCursor = 11 }
             onClicked: root.pop()
           }
         }

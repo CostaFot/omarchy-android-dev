@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Mirror with the screen off**: a new setting (`mirrorScreenOff`, off by default; a switch on the Settings page under the scrcpy arguments, or `omarchy bar set costafot.android-dev mirrorScreenOff true`). With it on, *Mirror with scrcpy* runs `scrcpy --turn-screen-off --stay-awake`: the phone's own screen goes dark while the mirror runs, it stays awake while plugged in, and scrcpy turns the screen back on when it closes. The flags go ahead of `scrcpyArgs`, so your own arguments win; the Tools row's detail shows what will be appended, and `tools` reports `screen_off`. Checked live on a phone over USB (Android 16): the argv carried both flags, the phone's stay-on setting read 7 while the mirror ran and 0 after it closed, and scrcpy logged `Device display turned off`.
 - README: the emulator's window rule is `float` alone and the text says what happens (the emulator is an X11 window with a detached toolbar; tiled, it pads the tile grey with the toolbar loose over it; floated, it takes its phone shape with the toolbar attached and reopens where it was last dragged, so `center` does nothing for it; scrcpy keeps `center`). A FAQ entry says why the window looks wrong without the rule and why it comes out small on a scaled monitor. Verified live with rules added through `hyprctl eval`.
 
 ## 1.0.0

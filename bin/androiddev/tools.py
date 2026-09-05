@@ -130,7 +130,8 @@ def running_avds(devices):
 
 def describe(adb_path, settings, devices, avds=None):
     """The `tools` payload: what is installed, the AVDs with Running or
-    Stopped, the extra scrcpy arguments."""
+    Stopped, the scrcpy arguments the settings add (`scrcpy_args`, what
+    `tool scrcpy` appends: the screen-off flags, then scrcpyArgs)."""
     found = find_all(adb_path)
     emulator = found["emulator"]["path"]
     names = avds if avds is not None else (list_avds(emulator) if emulator else [])
@@ -148,7 +149,8 @@ def describe(adb_path, settings, devices, avds=None):
         "tools": found,
         "avds": rows,
         "avd_count": len(rows),
-        "scrcpy_args": fmt.clean(str(settings.get("scrcpyArgs") or "")),
+        "scrcpy_args": fmt.clean(" ".join(scrcpy_extra_args(settings))),
+        "screen_off": bool(settings.get("mirrorScreenOff")),
     }
 
 
@@ -183,12 +185,22 @@ def launch(argv, name, env=None):
         raise AdbError("no_tool", f"{name} exited at once (code {proc.returncode})")
 
 
+# What the mirrorScreenOff setting adds: the device's own screen goes dark
+# while the mirror runs (scrcpy turns it back on when it exits) and, plugged
+# in, the device stays awake; the user's scrcpyArgs follow so they win.
+SCREEN_OFF_ARGS = ["--turn-screen-off", "--stay-awake"]
+
+
+def scrcpy_extra_args(settings):
+    flags = list(SCREEN_OFF_ARGS) if settings.get("mirrorScreenOff") else []
+    return flags + str(settings.get("scrcpyArgs") or "").split()
+
+
 def scrcpy(serial, settings, label=None, adb_path=None):
     path = scrcpy_path()
     if not path:
         raise AdbError("no_tool", "scrcpy is not installed")
-    extra = str(settings.get("scrcpyArgs") or "").split()
-    argv = [path, "-s", serial, "--window-title", APP_NAME] + extra
+    argv = [path, "-s", serial, "--window-title", APP_NAME] + scrcpy_extra_args(settings)
     launch(argv, "scrcpy", env={"ADB": adb_path} if adb_path else None)
     return {"notice": f"scrcpy started: {label or serial}", "argv": argv[1:]}
 

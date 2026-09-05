@@ -464,7 +464,7 @@ Item {
     "  refresh              re-read adb and the device list",
     "Action verbs return at once; the result arrives as a notification and in the panel.",
     "Settings: the panel's Settings page, or `omarchy bar set costafot.android-dev KEY VALUE` (adbPath screenshotDir",
-    "recordingDir apkDir scrcpyArgs notify deviceNotifications confirmUninstall showSystemApps); both apply at once."
+    "recordingDir apkDir scrcpyArgs mirrorScreenOff notify deviceNotifications confirmUninstall showSystemApps); both apply at once."
   ]
 
   //   omarchy-shell costafot.android-dev help

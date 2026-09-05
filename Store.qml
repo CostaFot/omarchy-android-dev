@@ -30,7 +30,7 @@ QtObject {
   // The scalars the helper understands (cli.SETTING_DEFAULTS). Keys it does
   // not know are ignored on its side, so this list can lead the helper.
   readonly property var helperSettingKeys: ["adbPath", "screenshotDir", "recordingDir", "apkDir", "scrcpyArgs",
-                                            "notify", "deviceNotifications", "confirmUninstall", "showSystemApps"]
+                                            "mirrorScreenOff", "notify", "deviceNotifications", "confirmUninstall", "showSystemApps"]
 
   // Serialised once so a re-injection of identical settings (every remount
   // does one) changes nothing downstream.

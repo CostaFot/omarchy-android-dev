@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0
+
+- First QML: the plugin is in the bar. `Service.qml` (loaded once per shell while the plugin is enabled) owns the Store, the device tracker and the IPC target; `BarWidget.qml` shows the droid glyph with the device count, dimmed with no device, red while the selected one waits for authorisation, and opens the hub; `Panel.qml` is the hub: the selected device with its state, the pages to come as muted rows, `j`/`k`, Enter, `r`, Escape.
+- `Store.qml` runs the helper the way Markets does (one process at a time, last command wins, `/bin/sh -c exec` in front of `/usr/bin/python3`, a 1 MiB tripwire, the 60 s budget passed as `OMARCHY_ANDROID_DEV_TOTAL_BUDGET`, SIGTERM then SIGKILL after it) plus a run generation, so a timer armed for a killed run can never touch the next one.
+- The tracker is one `omarchy-android-dev track` process with a `SplitParser`; it restarts with a 5 s to 60 s backoff and at once when the settings change. Each frame replaces the device list; a device connecting, disconnecting or waiting for authorisation sends a notification (`deviceNotifications`, `notify`).
+- IPC target `costafot.android-dev`: `help open close show hide toggle page status devices select screenshot refresh`. Action verbs return at once; the helper's own notification carries the result.
+- Helper: `devices[].detail` (`Emulator · ready`, `USB · needs authorising: accept the prompt on the device`) so the hub renders a string Python built; the tracker re-reads the state file every frame so a `select` from another run is seen; the helper and the tracker's adb child ask the kernel for SIGTERM when their parent dies (`PR_SET_PDEATHSIG`), because the shell ends an unwanted helper with SIGKILL and an `adb track-devices` was left behind without it.
+- 88 offline tests.
+
 ## 0.1.0
 
 - The Python core, terminal only: `bin/omarchy-android-dev` finds adb (the `adbPath` setting, `$ANDROID_HOME`/`$ANDROID_SDK_ROOT`, `~/Android/Sdk`, then PATH), lists and tracks devices, lists packages and one package's details, runs the seven per-package actions and the two permission sweeps, fires deep links, reads and flips the eight developer toggles, and takes a screenshot to the pictures folder, the clipboard and a notification. Every answer is one JSON line, exit 0, errors inside.

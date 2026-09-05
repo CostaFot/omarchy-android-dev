@@ -78,6 +78,18 @@ def device_label(serial, model=None, avd=None):
     return f"{name} ({serial})" if name else serial
 
 
+KIND_TEXT = {"emulator": "Emulator", "usb": "USB", "wifi": "Wi-Fi"}
+STATE_TEXT = {"device": "ready", "unauthorized": "needs authorising: accept the prompt on the device", "offline": "offline"}
+
+
+def device_detail(kind, state):
+    """`Emulator · ready`, `USB · needs authorising: accept the prompt on the
+    device`, `USB · no permissions (…)`: the hub's line under the label."""
+    kind_text = KIND_TEXT.get(kind, clean(kind))
+    state_text = STATE_TEXT.get(state, clean(state))
+    return f"{kind_text} · {state_text}" if state_text else kind_text
+
+
 def display_path(path):
     home = os.path.expanduser("~")
     p = str(path or "")

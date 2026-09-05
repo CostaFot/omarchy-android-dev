@@ -31,6 +31,19 @@ SERVER_LOCK_CEILING = 10.0
 SERVER_STAMP_WINDOW = 10.0
 
 
+def die_with_parent():
+    """PR_SET_PDEATHSIG: SIGTERM from the kernel when the parent thread that
+    started us goes away. Linux only, best effort; used by the helper for
+    itself (`track`) and by the tracker's adb child."""
+    try:
+        import ctypes
+        import signal
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.prctl(1, signal.SIGTERM, 0, 0, 0)
+    except (OSError, AttributeError):
+        pass
+
+
 class AdbError(Exception):
     def __init__(self, code, message, stderr=""):
         super().__init__(message)
@@ -361,14 +374,19 @@ class Adb:
         return self.run(["shell", *cmd], serial=serial, **kw)
 
     def popen(self, args, serial=None):
-        """A long-lived child (track-devices); the caller owns it."""
+        """A long-lived child (track-devices); the caller owns it. The child
+        asks the kernel for SIGTERM when this helper dies, however it dies:
+        the shell ends a helper it no longer wants with SIGKILL, which no
+        signal handler can forward (seen 2026-09-05: an orphaned
+        `adb track-devices` after disabling the plugin)."""
         argv = [self.path]
         if serial:
             argv += ["-s", serial]
         argv += [str(a) for a in args]
         _debug("popen " + " ".join(argv))
         try:
-            return subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+            return subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    close_fds=True, preexec_fn=die_with_parent)
         except OSError as e:
             raise AdbError("no_adb", f"Cannot start {argv[0]}: {e.strerror}") from e
 

@@ -10,7 +10,7 @@ import threading
 import time
 
 from . import fmt
-from .adb import AdbError, classify, run_bounded
+from .adb import AdbError, classify, die_with_parent, run_bounded
 
 SERIAL_RE = re.compile(r"^[A-Za-z0-9._:\-]{1,128}$")
 
@@ -80,6 +80,7 @@ def list_devices(adb, with_labels=True):
             avd = avd_name(adb, d["serial"])
         d["avd"] = avd
         d["label"] = fmt.device_label(d["serial"], d["model"], avd)
+        d["detail"] = fmt.device_detail(d["kind"], d["state"])
     return devices
 
 
@@ -156,6 +157,7 @@ def track(adb, state, out=None):
     when adb goes away (one `error` event, exit 0). SIGTERM/SIGINT are
     forwarded to the child and end the run cleanly."""
     out = out or sys.stdout
+    die_with_parent()  # a crashed or killed shell must not leave this helper behind
     adb.ensure_server()
     proc = adb.popen(["track-devices"])
     stopping = {"flag": False}
@@ -199,6 +201,10 @@ def track(adb, state, out=None):
                 except AdbError as e:
                     _emit({"event": "error", "error": e.to_dict()}, out)
                     continue
+                # Another helper run may have written `select` since the
+                # last frame; the cached document would not know.
+                if state:
+                    state.reload()
                 remembered = state.selected if state else None
                 try:
                     selected = resolve_serial(devices, None, remembered)

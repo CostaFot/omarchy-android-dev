@@ -54,6 +54,10 @@ class Parsing(unittest.TestCase):
         self.assertEqual(fmt.device_label(SERIAL, "sdk_gphone16k_x86_64", "Pixel_10_Pro_Fold"), "Pixel 10 Pro Fold (emulator-5554)")
         self.assertEqual(fmt.device_label("ZY22", "Pixel_7_Pro", None), "Pixel 7 Pro (ZY22)")
         self.assertEqual(fmt.device_label("ZY22", "", None), "ZY22")
+        self.assertEqual(fmt.device_detail("emulator", "device"), "Emulator · ready")
+        self.assertEqual(fmt.device_detail("usb", "unauthorized"), "USB · needs authorising: accept the prompt on the device")
+        self.assertEqual(fmt.device_detail("wifi", "offline"), "Wi-Fi · offline")
+        self.assertEqual(fmt.device_detail("usb", "no permissions (user in plugdev group; are your udev rules wrong?)"), "USB · no permissions (user in plugdev group; are your udev rules wrong?)")
 
     def test_resolve_serial_rules(self):
         devices = [{"serial": "a"}, {"serial": "b"}]
@@ -89,6 +93,7 @@ class Live(FakeAdbCase):
     def test_list_devices_labels_an_emulator_from_emu_avd_name(self):
         d = devmod.list_devices(Adb(FAKE_ADB, "override", None))
         self.assertEqual(d[0]["label"], "Pixel 10 Pro Fold (emulator-5554)")
+        self.assertEqual(d[0]["detail"], "Emulator · ready")
         self.assertIn(["-s", SERIAL, "emu", "avd", "name"], self.calls())
 
     def test_track_streams_one_event_per_frame_and_leaves_no_child(self):
@@ -107,9 +112,27 @@ class Live(FakeAdbCase):
         self.assertEqual(events[1]["added"], [])
         self.assertEqual(events[1]["removed"], [])
         self.assertFalse(events[1]["initial"])
-        time.sleep(0.3)
-        left = subprocess.run(["pgrep", "-af", "fakeadb.py"], capture_output=True, text=True).stdout
-        self.assertNotIn("track-devices", left)
+        self.assertNotIn("track-devices", self.wait_for_no_fake_adb())
+
+    def wait_for_no_fake_adb(self):
+        for _ in range(20):
+            left = subprocess.run(["pgrep", "-af", "fakeadb.py"], capture_output=True, text=True).stdout
+            if "track-devices" not in left:
+                break
+            time.sleep(0.1)
+        return left
+
+    def test_track_helper_killed_outright_takes_adb_with_it(self):
+        # The shell ends a helper it no longer wants with SIGKILL, which
+        # cannot be forwarded; the adb child must still go (PDEATHSIG).
+        self.add_rules({"match": "track-devices", "stdout": "0000", "sleep_after": 30})
+        proc = subprocess.Popen([sys.executable, HELPER, "track"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=dict(os.environ))
+        json.loads(proc.stdout.readline())
+        proc.kill()
+        proc.wait(timeout=5)
+        proc.stdout.close()
+        proc.stderr.close()
+        self.assertNotIn("track-devices", self.wait_for_no_fake_adb())
 
     def test_track_without_adb_prints_one_error_line(self):
         env = dict(os.environ, OMARCHY_ANDROID_DEV_PATH="/nonexistent")

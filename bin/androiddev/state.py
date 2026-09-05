@@ -176,6 +176,12 @@ class State:
                 self._doc["recent_deeplinks"] = [fmt.clean(u, 2048) for u in data["recent_deeplinks"] if isinstance(u, str)][:fmt.MAX_RECENT_DEEPLINKS]
         return self._doc
 
+    def reload(self):
+        """Forget the cached document so the next read sees what another
+        helper run wrote (the tracker calls this once per frame)."""
+        if not self._dirty:
+            self._doc = None
+
     @property
     def selected(self):
         return self._load()["selected"]

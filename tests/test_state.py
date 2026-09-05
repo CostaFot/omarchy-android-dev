@@ -93,6 +93,20 @@ class Files(FakeAdbCase):
         self.assertEqual(s2.recent_deeplinks[0], "https://example.com/11")
         self.assertEqual(s2.last_package("emulator-5554"), "com.foo")
 
+    def test_reload_sees_what_another_run_wrote(self):
+        watcher = State()
+        self.assertIsNone(watcher.selected)
+        other = State()
+        other.select("emulator-5554")
+        other.save()
+        self.assertIsNone(watcher.selected)  # cached
+        watcher.reload()
+        self.assertEqual(watcher.selected, "emulator-5554")
+        # Unsaved local changes survive a reload.
+        watcher.select("ZY22")
+        watcher.reload()
+        self.assertEqual(watcher.selected, "ZY22")
+
     def test_package_cache_file_name_is_safe(self):
         self.assertEqual(statemod.file_token("localhost:5555"), "localhost_5555")
         self.assertEqual(statemod.file_token("../x"), ".._x")

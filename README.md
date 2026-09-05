@@ -4,7 +4,7 @@ The Android developer's side of a device, on the [Omarchy](https://omarchy.org) 
 
 Started as a port of the Windows [ADB Extension for Command Palette](https://github.com/CostaFot/AdbExtension), the same way [Markets](https://github.com/CostaFot/omarchy-markets) was a port of the Markets extension, and grew into a device hub.
 
-**Work in progress.** Nothing shows in the bar yet. What exists is the part that talks to `adb`, and it works from a terminal.
+**Work in progress.** In the bar: a droid glyph that lights up with a device and dims without one, a notification when a device connects or disconnects, and a hub that shows the selected device. The pages hang off it one release at a time; the part that talks to `adb` is complete and works from a terminal.
 
 ## Requirements
 
@@ -18,7 +18,19 @@ A device over USB, or an emulator. Wireless debugging is not supported.
 omarchy plugin add https://github.com/CostaFot/omarchy-android-dev --enable
 ```
 
-## Today, from a terminal
+## From the shell
+
+```bash
+omarchy-shell costafot.android-dev help          # the verbs
+omarchy-shell costafot.android-dev toggle        # the hub
+omarchy-shell costafot.android-dev status | jq   # adb, devices, the tracker
+omarchy-shell costafot.android-dev screenshot    # saved, on the clipboard, with a notification
+omarchy-shell costafot.android-dev select emulator-5554
+```
+
+Bind any of them to a key in Hyprland the way you would any command.
+
+## From a terminal
 
 Every command answers with one line of JSON. Errors ride inside it; the exit code is always 0.
 

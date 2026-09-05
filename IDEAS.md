@@ -30,6 +30,8 @@ Backlog, not commitments. Dead ideas stay here marked as such so they are not re
 
 ## Helper details worth revisiting
 
+- The `page` IPC verb opens the panel on the first registered bar widget when none is open; `open`/`toggle` go through the shell and pick the focused monitor. With two monitors `page` can open on the other one.
+
 - `screencap -p` on a device with several displays (the foldable emulator) prints a warning ahead of the PNG and picks the first display; `-d <id>` from `dumpsys SurfaceFlinger --display-id` would let the user choose. 1.0 strips the warning and keeps the image.
 - A second `ps -A` format: some vendor ROMs print `ps` without the `u0_a` user column, so nothing shows as Running. A `pidof`-based fallback per listed package would be many calls; `dumpsys activity processes` is one.
 - `resolve-activity` on packages with several launcher activities returns one; a picker would need `cmd package query-activities`.

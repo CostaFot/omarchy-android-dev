@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 
-from . import PLUGIN_ID, actions, adb as adbmod, capture, devices as devmod, fmt, packages as pkgmod, plugin_version, toggles as togmod
+from . import PLUGIN_ID, actions, adb as adbmod, apk as apkmod, capture, devices as devmod, fmt, packages as pkgmod, plugin_version, text as textmod, toggles as togmod, tools as toolsmod
 from .adb import Adb, AdbError, PartialError
 from .state import State
 
@@ -52,6 +52,15 @@ HELP = [
     ("record", "screenrecord on the device until Ctrl-C (or its 3 min limit), then pull to the videos dir"),
     ("toggles", "the eight developer toggles with their state"),
     ("toggle NAME [on|off]", "flip (or set) animations, touches, pointer, layout, airplane, wifi, data, bluetooth"),
+    ("apk list [DIR]", "the .apk files in DIR (default: the apkDir setting)"),
+    ("apk install PATH...", "adb install -r -t, one file after another"),
+    ("text send TEXT", "type TEXT on the device (input text; one line of ASCII)"),
+    ("text clipboard", "type the clipboard (wl-paste) on the device"),
+    ("tools", "scrcpy, emulator and terminal found or not; the AVDs with Running or Stopped"),
+    ("tool scrcpy", "mirror the selected device (scrcpy -s SERIAL --window-title, plus scrcpyArgs)"),
+    ("tool avd NAME", "start that AVD (refused while it runs)"),
+    ("tool avd-stop SERIAL", "stop a running emulator (adb emu kill)"),
+    ("tool logcat [PKG]", "adb logcat in a terminal, following PKG's process when given"),
     ("help", "this list"),
 ]
 
@@ -218,32 +227,16 @@ class Context:
 
 # ---- commands --------------------------------------------------------------
 
-def _tool(path):
-    return {"found": bool(path), "path": path}
-
-
-def _which(name):
-    import shutil
-    return shutil.which(name)
-
-
 def cmd_status(ctx, args):
     adb = ctx.adb
-    root = adbmod.sdk_root(adb.path) if adb else None
-    emulator = os.path.join(root, "emulator", "emulator") if root else None
-    if not (emulator and os.access(emulator, os.X_OK)):
-        emulator = _which("emulator")
     payload = {
         "version": plugin_version(),
         "python": sys.version.split()[0],
         "state_dir": ctx.state.dir,
         "state_dir_text": fmt.display_path(ctx.state.dir) if ctx.state.dir else None,
-        "tools": {
-            "scrcpy": _tool(_which("scrcpy")),
-            "emulator": _tool(emulator),
-            "terminal": _tool(_which("xdg-terminal-exec")),
-            "wl_copy": _tool(_which("wl-copy")),
-        },
+        "tools": toolsmod.find_all(adb.path if adb else None),
+        "apk_dir": apkmod.apk_dir(ctx.settings),
+        "apk_dir_text": fmt.display_path(apkmod.apk_dir(ctx.settings)),
         "screenshot_dir": capture.screenshot_dir(ctx.settings),
         "screenshot_dir_text": fmt.display_path(capture.screenshot_dir(ctx.settings)),
         "recording_dir": capture.recording_dir(ctx.settings),
@@ -378,6 +371,98 @@ def cmd_toggle(ctx, args):
     return togmod.flip(adb, serial, args[0], want)
 
 
+def cmd_apk(ctx, args):
+    usage = "apk list [DIR] | apk install PATH..."
+    if not args:
+        raise BadArgs(usage)
+    if args[0] == "list":
+        if len(args) > 2:
+            raise BadArgs(usage)
+        return apkmod.list_apks(apkmod.apk_dir(ctx.settings, args[1] if len(args) == 2 else None))
+    if args[0] == "install":
+        if len(args) < 2:
+            raise BadArgs(usage)
+        paths = [apkmod.check_path(p) for p in args[1:]]
+        adb, serial = ctx.device()
+        return apkmod.install(adb, serial, paths)
+    raise BadArgs(usage)
+
+
+def cmd_text(ctx, args):
+    usage = "text send TEXT | text clipboard"
+    if len(args) == 2 and args[0] == "send":
+        text, source = args[1], "text"
+    elif args == ["clipboard"]:
+        text, source = textmod.clipboard_text(), "clipboard"
+    else:
+        raise BadArgs(usage)
+    textmod.check(text)
+    adb, serial = ctx.device()
+    return textmod.send(adb, serial, text, source)
+
+
+def _device_label(ctx, serial):
+    return next((d["label"] for d in (ctx._devices or []) if d["serial"] == serial), serial)
+
+
+def cmd_tools(ctx, args):
+    """What is installed and the AVDs. Works without adb (nothing is
+    Running then, and `no_adb` rides in the envelope)."""
+    if args:
+        raise BadArgs("tools")
+    adb_path = ctx.adb.path if ctx.adb else None
+    try:
+        devices = ctx.devices()
+    except AdbError as e:
+        raise PartialError(toolsmod.describe(adb_path, ctx.settings, []), e) from e
+    return toolsmod.describe(adb_path, ctx.settings, devices)
+
+
+def cmd_tool(ctx, args):
+    usage = "tool scrcpy | tool avd NAME | tool avd-stop SERIAL | tool logcat [PKG]"
+    if not args:
+        raise BadArgs(usage)
+    sub = args[0]
+    if sub == "scrcpy":
+        if len(args) != 1:
+            raise BadArgs(usage)
+        adb, serial = ctx.device()
+        return toolsmod.scrcpy(serial, ctx.settings, _device_label(ctx, serial))
+    if sub == "avd":
+        if len(args) != 2 or not toolsmod.AVD_RE.match(args[1]):
+            raise BadArgs("tool avd NAME")
+        emulator = toolsmod.emulator_path(ctx.adb.path if ctx.adb else None)
+        avds = toolsmod.list_avds(emulator)
+        try:
+            running = toolsmod.running_avds(ctx.devices())
+        except AdbError:
+            running = {}
+        return toolsmod.avd_start(emulator, args[1], avds, running)
+    if sub == "avd-stop":
+        if len(args) != 2 or not devmod.valid_serial(args[1]):
+            raise BadArgs("tool avd-stop SERIAL")
+        adb = ctx.require_adb()
+        devices = ctx.devices()
+        target = next((d for d in devices if d["serial"] == args[1]), None)
+        if target is None:
+            raise AdbError("no_device", f"Device {args[1]} is not attached")
+        if target["kind"] != "emulator":
+            raise AdbError("bad_args", f"{args[1]} is not an emulator")
+        return toolsmod.avd_stop(adb, args[1], target["label"])
+    if sub == "logcat":
+        if len(args) > 2:
+            raise BadArgs("tool logcat [PKG]")
+        pkg = args[1] if len(args) == 2 else None
+        if pkg is not None and not pkgmod.valid_package(pkg):
+            raise BadArgs("tool logcat [PKG]")
+        adb, serial = ctx.device()
+        payload = toolsmod.logcat(adb, serial, pkg, _device_label(ctx, serial))
+        if pkg:
+            ctx.state.set_last_package(serial, pkg)
+        return payload
+    raise BadArgs(usage)
+
+
 def cmd_help(ctx, args):
     return {"commands": [{"usage": u, "text": t} for u, t in HELP], "text": help_text()}
 
@@ -398,6 +483,10 @@ COMMANDS = {
     "screenshot": cmd_screenshot,
     "toggles": cmd_toggles,
     "toggle": cmd_toggle,
+    "apk": cmd_apk,
+    "text": cmd_text,
+    "tools": cmd_tools,
+    "tool": cmd_tool,
     "help": cmd_help,
 }
 

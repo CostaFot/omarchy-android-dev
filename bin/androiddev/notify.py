@@ -31,6 +31,13 @@ def wl_copy_path():
     return shutil.which("wl-copy")
 
 
+def wl_paste_path():
+    override = os.environ.get("OMARCHY_ANDROID_DEV_WL_PASTE")
+    if override is not None:
+        return override if override and os.access(override, os.X_OK) else None
+    return shutil.which("wl-paste")
+
+
 def _run(argv, stdin=None, timeout=5):
     """argv with a deadline; stdin is /dev/null unless a file is given, so a
     tool that reads its input can never wait on the shell's."""

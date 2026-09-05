@@ -5,8 +5,11 @@ Backlog, not commitments. Dead ideas stay here marked as such so they are not re
 ## From the Windows wishlist and the scaffold's open questions
 
 - **Wireless debugging** (`adb pair` with the code on stdin, `adb connect`, then `get-state` until `device`; `adb mdns services` or avahi `_adb-tls-connect._tcp` for discovery). Decided out of 1.0 on 2026-09-05: USB and emulators only. `adb connect` exits 0 on failure and success is the substring `connected to`; `pair` takes the code on stdin, never argv.
-- **Non-ASCII text** for Send text: Android's `input text` is ASCII only. ADBKeyboard (a broadcast to `ADB_INPUT_TEXT` with base64) is the usual answer and needs an APK on the device; a `bad_args` with a plain message is what 1.0 does.
+- **Non-ASCII text** for Send text: Android's `input text` is ASCII only. ADBKeyboard (a broadcast to `ADB_INPUT_TEXT` with base64) is the usual answer and needs an APK on the device; a `bad_args` with a plain message is what 1.0 does (0.5.0). A literal `%s` in the text becomes a space on the device (input's own escape); nobody has asked for a way around it.
 - **Split APKs** (`.apks`, `.xapk`, `adb install-multiple`) in the APK manager. 1.0 installs single `.apk` files.
+- **Recent APK folders** in the folder box (the plan's `recent_apk_dirs`): 0.5.0 prefills the `apkDir` setting and keeps the typed folder only while the page is on the stack. Would be one more list in `state.json`, like the recent deep links.
+- **Logcat for a package that is not running**: 0.5.0 refuses (`pidof` finds nothing) and says to launch it first. Launching it and then following its pid, or `logcat` with a `--regex` on the package name as a fallback, would be friendlier.
+- **scrcpy's window and the emulator's on Hyprland**: the Tools page launches both through `uwsm-app`; the float-and-center rules for the `Emulator` class and scrcpy's `--window-title "Android Dev"` are S7's README material.
 - **Pull shared preferences** (`run-as PKG cat shared_prefs/*.xml`) for a debuggable package; a page under the package's actions.
 - **Global per-action favorites** as on Windows (star "Launch" for every package). Dead, 2026-09-05: replaced by the last package per device and recent deep links.
 - **Keep the panel open after an action** (`keepOpen` on Windows). Dead: the panel stays open by design.

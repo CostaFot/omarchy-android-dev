@@ -4,7 +4,7 @@ The Android developer's side of a device, on the [Omarchy](https://omarchy.org) 
 
 Started as a port of the Windows [ADB Extension for Command Palette](https://github.com/CostaFot/AdbExtension), the same way [Markets](https://github.com/CostaFot/omarchy-markets) was a port of the Markets extension, and grew into a device hub.
 
-**Work in progress.** In the bar: a droid glyph that lights up with a device and dims without one (and turns red with a dot while a recording runs), a notification when a device connects or disconnects, and a hub that shows the selected device. The pages hang off it one release at a time; the part that talks to `adb` is complete and works from a terminal.
+**Work in progress.** In the bar: a droid glyph that lights up with a device and dims without one (and turns red with a dot while a recording runs), a notification when a device connects or disconnects, and a hub that shows the selected device. The pages hang off it one release at a time (Settings is the one still to come); the part that talks to `adb` is complete and works from a terminal.
 
 ## In the panel
 
@@ -13,6 +13,9 @@ Started as a port of the Windows [ADB Extension for Command Palette](https://git
 - **Deep link**: type a URL or a deep link and press Enter; the recent ones are listed below and can be fired again. From a package's actions page the link is scoped to that package.
 - **Toggles**: Animations, Show touches, Pointer location, Layout bounds, Airplane mode, Wi-Fi, Mobile data and Bluetooth, each with its current state read from the device; Enter flips it and the row repaints. Each row names the adb command behind it.
 - **Capture**: Screenshot (saved to your Pictures folder, put on the clipboard, shown in a notification) and Start recording. A recording runs on the device (`screenrecord`, three minutes at most) while the row shows the elapsed time and the bar glyph a dot; Enter again stops it, and the mp4 is pulled into your Videos folder, removed from the device and announced. The folders follow Omarchy's own (`OMARCHY_SCREENSHOT_DIR`, `OMARCHY_SCREENRECORD_DIR`, else `~/Pictures` and `~/Videos`) and can be set in the plugin settings.
+- **APKs**: a folder box, prefilled from the *APK folder* setting (`~/Downloads`), lists the `.apk` files in it as you type. Enter on one installs it (`adb install -r -t`, so a debug build marked testOnly installs too) and the row says Installed or quotes adb's `Failure [...]`. *Install all* runs them one after another.
+- **Send text**: type a line and press Enter to have it typed into whatever field has focus on the device, or send the clipboard. Android's `input text` types one line of ASCII; anything else is refused with a plain message rather than typed wrong (a `%s` in the text becomes a space on the device, input's own escape).
+- **Tools**: *Mirror with scrcpy* (once scrcpy is installed; the *Extra scrcpy arguments* setting is appended), *Logcat* for the package you last touched (`adb logcat --pid=…` in your default terminal; the app has to be running), and one row per emulator AVD showing Running or Stopped: Enter starts a stopped one and, after a confirm, stops a running one. What the Tools page launches is yours to close; the plugin never kills it.
 
 Every action shows its result in the panel and sends a notification with the device's name. `j`/`k` or the arrows move, Enter runs, Escape or Backspace goes back, `r` reads again.
 
@@ -36,11 +39,15 @@ omarchy-shell costafot.android-dev toggle        # the hub
 omarchy-shell costafot.android-dev status | jq   # adb, devices, the tracker
 omarchy-shell costafot.android-dev screenshot    # saved, on the clipboard, with a notification
 omarchy-shell costafot.android-dev select emulator-5554
-omarchy-shell costafot.android-dev page packages # open the panel on a page: hub, devices, packages, deeplink, toggles, capture
+omarchy-shell costafot.android-dev page packages # open the panel on a page: hub, devices, packages, deeplink, toggles, capture, apks, text, tools
 omarchy-shell costafot.android-dev launch com.android.chrome   # forcestop and clear take a package too
 omarchy-shell costafot.android-dev deeplink https://example.com
 omarchy-shell costafot.android-dev flip touches  # animations, touches, pointer, layout, airplane, wifi, data, bluetooth
 omarchy-shell costafot.android-dev record start  # stop pulls the mp4 into ~/Videos; toggle does either
+omarchy-shell costafot.android-dev text "hello world"          # typed into the focused field; clipboard sends the clipboard
+omarchy-shell costafot.android-dev scrcpy                      # mirror the selected device
+omarchy-shell costafot.android-dev avd Medium_Phone            # start that emulator
+omarchy-shell costafot.android-dev logcat com.android.chrome   # adb logcat --pid in a terminal; no package follows everything
 ```
 
 Bind any of them to a key in Hyprland the way you would any command.
@@ -62,13 +69,16 @@ bin/omarchy-android-dev toggle touches | jq .notice                     # animat
 bin/omarchy-android-dev screenshot | jq .path                           # saved, on the clipboard, with a notification
 bin/omarchy-android-dev record                                          # records until Ctrl-C, then prints the mp4's path
 bin/omarchy-android-dev select emulator-5554 | jq .notice               # with more than one device attached; --serial S does it per call
+bin/omarchy-android-dev apk list ~/Downloads | jq '.apks[].name'        # apk install PATH... installs them in turn
+bin/omarchy-android-dev text send "hello world" | jq .notice            # text clipboard sends the clipboard
+bin/omarchy-android-dev tools | jq '.avds[] | [.name, .detail]'         # tool scrcpy, tool avd NAME, tool avd-stop SERIAL, tool logcat [PKG]
 ```
 
 Emulators show up by their AVD name, as in `Pixel 10 Pro Fold (emulator-5554)`.
 
 ## How it runs
 
-The plugin never runs `adb` from the shell. A Python 3 helper with no dependencies does, as `/usr/bin/python3` with an argument list, `-s SERIAL` on every device command, a deadline and a size cap on every call. State lives in `~/.local/state/omarchy/costafot.android-dev/`, private to your user. Nothing leaves your machine: `adb` talks to its own server on `127.0.0.1` and to your device.
+The plugin never runs `adb` from the shell. A Python 3 helper with no dependencies does, as `/usr/bin/python3` with an argument list, `-s SERIAL` on every device command, a deadline and a size cap on every call. State lives in `~/.local/state/omarchy/costafot.android-dev/`, private to your user. Nothing leaves your machine: `adb` talks to its own server on `127.0.0.1` and to your device. scrcpy, the emulator and the logcat terminal are started detached, the way Omarchy's own launchers start apps, and are never signalled by the plugin; an emulator stops through `adb emu kill`.
 
 ## Uninstall
 

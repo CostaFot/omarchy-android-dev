@@ -5,15 +5,16 @@ import qs.Ui
 
 // Popup for the Android Dev bar widget: the hub is the selected device with
 // the pages hanging off it (Devices, Apps and a package's actions, Deep
-// link, Toggles, Capture; the rest arrive with their versions). Pages live on a stack; Escape and Backspace
-// walk back, Escape on the hub closes. The data is the service's Store
+// link, Toggles, Capture, APKs, Send text, Tools; Settings arrives with
+// its version). Pages live on a stack; Escape and Backspace walk back,
+// Escape on the hub closes. The data is the service's Store
 // (one per shell), reached through `service`; this panel never runs the
 // helper for itself beyond asking the store (or the service, for actions
 // that also notify) to.
 //
 // Page renderers build one flat `rows` array and a Repeater paints it.
-// The filter / URL field and the uninstall dialog live outside the
-// Repeater: rows are rebuilt on every document. The service owns the
+// The filter / URL / folder / text field and the confirm dialog live
+// outside the Repeater: rows are rebuilt on every document. The service owns the
 // plugin's IPC target, so `manageIpc` is off here.
 Panel {
   id: root
@@ -41,6 +42,8 @@ Panel {
     if (page === "packages") store.refreshPackages()
     else if (page === "actions") store.fetchPackage(current.pkg)
     else if (page === "toggles") store.refreshToggles()
+    else if (page === "apks") { resetInstalls(); listApks() }
+    else if (page === "tools") store.refreshTools()
     else store.refreshStatus()
   }
 
@@ -52,14 +55,14 @@ Panel {
   readonly property var current: stack[stack.length - 1]
   readonly property string page: current.page
   readonly property bool isHub: stack.length === 1
-  readonly property bool hasField: page === "packages" || page === "deeplink"
+  readonly property bool hasField: page === "packages" || page === "deeplink" || page === "apks" || page === "text"
 
   readonly property var pageTitles: ({
     hub: "Android Dev", devices: "Devices", packages: "Apps", actions: "", deeplink: "Deep link", toggles: "Toggles",
     capture: "Capture", apks: "APKs", text: "Send text", tools: "Tools", settings: "Settings"
   })
   // Pages the IPC `page` verb may open straight onto.
-  readonly property var ipcPages: ["hub", "devices", "packages", "deeplink", "toggles", "capture"]
+  readonly property var ipcPages: ["hub", "devices", "packages", "deeplink", "toggles", "capture", "apks", "text", "tools"]
 
   function push(entry) {
     var top = Object.assign({}, current, { cursor: selectedIndex, query: filterField.text })
@@ -95,12 +98,15 @@ Panel {
 
   function enterPage(entry) {
     listScroll.contentY = 0
-    filterField.text = entry.query || ""
+    // The APK page's field starts as the apkDir setting; the others empty.
+    filterField.text = entry.query !== undefined ? entry.query : (entry.page === "apks" ? apkDirSetting() : "")
     cancelConfirm()
     if (store) {
       if (entry.page === "packages") store.refreshPackages()
       else if (entry.page === "actions" && entry.pkg) store.fetchPackage(entry.pkg)
       else if (entry.page === "toggles") store.refreshToggles()
+      else if (entry.page === "apks") { resetInstalls(); listApks() }
+      else if (entry.page === "tools") store.refreshTools()
     }
     Qt.callLater(function() {
       var wanted = entry.cursor
@@ -130,6 +136,9 @@ Panel {
     else if (page === "deeplink") body = deeplinkRows()
     else if (page === "toggles") body = toggleRows()
     else if (page === "capture") body = captureRows()
+    else if (page === "apks") body = apkRows()
+    else if (page === "text") body = textRows()
+    else if (page === "tools") body = toolRows()
     else body = soonRows()
     for (var i = 0; i < body.length; i++) out.push(body[i])
     var s = root.store
@@ -148,9 +157,9 @@ Panel {
     { icon: "\uf0c1", label: "Deep link", detail: "Open a URL on the device", page: "deeplink" },
     { icon: "\uf1de", label: "Toggles", detail: "Animations, touches, layout bounds, airplane, Wi-Fi, data, Bluetooth", page: "toggles" },
     { icon: "\uf030", label: "Capture", detail: "Screenshot and screen recording", page: "capture" },
-    { icon: "\uf1b2", label: "APKs", detail: "Install from a folder", page: "apks", version: "0.5.0" },
-    { icon: "\uf11c", label: "Send text", detail: "Type text or the clipboard on the device", page: "text", version: "0.5.0" },
-    { icon: "\uf0ad", label: "Tools", detail: "scrcpy, emulators, logcat", page: "tools", version: "0.5.0" },
+    { icon: "\uf1b2", label: "APKs", detail: "Install from a folder", page: "apks" },
+    { icon: "\uf11c", label: "Send text", detail: "Type text or the clipboard on the device", page: "text" },
+    { icon: "\uf0ad", label: "Tools", detail: "scrcpy, emulators, logcat", page: "tools" },
     { icon: "\uf013", label: "Settings", detail: "adb path, folders, notifications", page: "settings", version: "0.6.0" }
   ]
 
@@ -406,6 +415,182 @@ Panel {
     return out
   }
 
+  // ---- APKs ---------------------------------------------------------------
+  // The folder field lists on the fly (debounced); Enter on a file installs
+  // it, Install all runs the files one after another through the service,
+  // each its own helper run with its own budget. Results live here, per
+  // panel, until the folder changes or `r`.
+  property var apkResults: ({})
+  property string apkInstalling: ""
+  property var apkQueue: []
+  property int apkBatchTotal: 0
+
+  function apkDirSetting() {
+    return store ? String(store.setting("apkDir", "~/Downloads") || "~/Downloads") : "~/Downloads"
+  }
+
+  function listApks() {
+    if (store) store.listApks(query)
+  }
+
+  function resetInstalls() {
+    apkResults = {}
+    apkQueue = []
+    apkBatchTotal = 0
+  }
+
+  property Timer apkListTimer: Timer {
+    interval: 300
+    repeat: false
+    onTriggered: root.listApks()
+  }
+
+  onQueryChanged: {
+    if (page === "apks") {
+      resetInstalls()
+      apkListTimer.restart()
+    }
+    // What was typed is the first row on these pages; Enter should take it
+    // (seen 2026-09-05: the cursor stayed on Send clipboard while typing).
+    if (page === "text" || page === "deeplink")
+      Qt.callLater(function() { root.selectedIndex = root.firstCursorIndex() })
+  }
+
+  function installApks(paths) {
+    if (apkInstalling !== "" || paths.length === 0) return
+    apkResults = {}
+    apkQueue = paths.slice()
+    apkBatchTotal = paths.length
+    installNext()
+  }
+
+  function installNext() {
+    if (apkQueue.length === 0) {
+      apkInstalling = ""
+      if (apkBatchTotal > 1 && service && store && store.notifyEnabled) {
+        var ok = 0
+        for (var k in apkResults) if (apkResults[k].ok) ok++
+        var dev = store.selectedDevice
+        service.notify("Installed " + ok + "/" + apkBatchTotal + " APKs", dev ? dev.label : "")
+      }
+      return
+    }
+    var path = apkQueue[0]
+    apkQueue = apkQueue.slice(1)
+    apkInstalling = path
+    var batch = apkBatchTotal > 1
+    act(["apk", "install", path], function(doc) {
+      var ok = doc && doc.ok !== false
+      var message = ok ? "Installed" : (doc && doc.results && doc.results[0] && doc.results[0].message ? String(doc.results[0].message) : (store ? store.lastError : "Failed"))
+      var next = Object.assign({}, root.apkResults)
+      next[path] = { ok: ok, message: message }
+      root.apkResults = next
+      root.installNext()
+    }, batch)
+  }
+
+  function apkRows() {
+    var s = root.store
+    var out = []
+    if (!deviceGate(out)) return out
+    var list = s.apkList
+    var reading = s.busy && s.runningCommand === "apk" && apkInstalling === ""
+    if (!list) {
+      out.push({ type: "note", label: reading ? "Reading the folder…" : "Type a folder path", detail: "The .apk files in it are listed here." })
+      return out
+    }
+    if (!list.exists) {
+      out.push({ type: "note", urgent: true, label: "Folder not found", detail: list.dir_text || "" })
+      return out
+    }
+    if (list.count === 0) {
+      out.push({ type: "note", label: "No .apk files in this folder", detail: list.dir_text || "" })
+      return out
+    }
+    var paths = []
+    for (var p = 0; p < list.apks.length; p++) paths.push(list.apks[p].path)
+    if (apkInstalling !== "" && apkBatchTotal > 1) {
+      var done = 0
+      for (var k in apkResults) done++
+      out.push({ type: "note", icon: "\uf019", label: "Installing… (" + done + "/" + apkBatchTotal + ")", detail: list.dir_text || "" })
+    } else if (list.count > 1) {
+      out.push({ type: "action", icon: "\uf019", label: "Install all", detail: list.count + " APKs · adb install -r -t, one after another",
+                 action: "installall", paths: paths })
+    }
+    for (var i = 0; i < list.apks.length; i++) {
+      var a = list.apks[i]
+      var r = apkResults[a.path]
+      var icon = "\uf1b2", detail = a.size_text || "", urgent = false
+      if (a.path === apkInstalling) { icon = "\uf017"; detail = "Installing…" }
+      else if (r && r.ok) { icon = "\uf00c"; detail = "Installed" }
+      else if (r) { icon = "\uf00d"; detail = r.message; urgent = true }
+      out.push({ type: "action", icon: icon, label: a.name, detail: detail, action: "install", path: a.path, urgent: urgent })
+    }
+    if (list.truncated) out.push({ type: "note", label: "Only the first " + list.count + " files are listed" })
+    return out
+  }
+
+  // ---- Send text ----------------------------------------------------------
+  function textRows() {
+    var s = root.store
+    var out = []
+    if (!deviceGate(out)) return out
+    if (query !== "") {
+      out.push({ type: "action", icon: "\uf11c", label: filterText, detail: "input text · Enter types it into the focused field on the device",
+                 action: "text", text: filterText })
+    } else {
+      out.push({ type: "note", label: "Type a line, then Enter", detail: "Android's input text types one line of ASCII into the focused field; %s in it becomes a space." })
+    }
+    out.push({ type: "action", icon: "\uf0ea", label: "Send clipboard", detail: "wl-paste, then input text", action: "clipboard" })
+    return out
+  }
+
+  // ---- Tools --------------------------------------------------------------
+  function toolRows() {
+    var s = root.store
+    var out = []
+    var t = s.toolsInfo
+    if (!t) {
+      out.push({ type: "note", label: s.busy && s.runningCommand === "tools" ? "Reading the tools…" : "Press r to read the tools" })
+      return out
+    }
+    var tools = t.tools || {}
+    var dev = s.selectedDevice
+    var ready = s.hasAdb && dev && dev.state === "device"
+    var gate = []
+    deviceGate(gate)
+    if (ready) {
+      if (tools.scrcpy && tools.scrcpy.found)
+        out.push({ type: "action", icon: "\uf26c", label: "Mirror with scrcpy",
+                   detail: "scrcpy -s <serial> --window-title \"Android Dev\"" + (t.scrcpy_args ? " " + t.scrcpy_args : ""), action: "scrcpy" })
+      else
+        out.push({ type: "note", label: "scrcpy not installed", detail: "Install the scrcpy package to mirror the screen from here; this page looks again each time it opens." })
+      if (tools.terminal && tools.terminal.found)
+        // The one place a row label is built around a package name: "Logcat · " + the last package.
+        out.push({ type: "action", icon: "\uf120", label: s.lastPackage !== "" ? "Logcat · " + s.lastPackage : "Logcat",
+                   detail: s.lastPackage !== "" ? "adb logcat --pid=<its pid> in a terminal · it has to be running" : "adb logcat in a terminal",
+                   action: "logcat", pkg: s.lastPackage })
+      else
+        out.push({ type: "note", label: "No terminal launcher", detail: "xdg-terminal-exec was not found; logcat opens in a terminal through it." })
+    } else {
+      for (var g = 0; g < gate.length; g++) out.push(gate[g])
+    }
+    out.push({ type: "header", label: "Emulators" })
+    if (!tools.emulator || !tools.emulator.found) {
+      out.push({ type: "note", label: "No emulator found", detail: "The SDK's emulator lives next to platform-tools; ~/Android/Sdk and PATH are searched too." })
+    } else if (!t.avds || t.avds.length === 0) {
+      out.push({ type: "note", label: "No AVDs", detail: "Create one in Android Studio's Device Manager." })
+    } else {
+      for (var i = 0; i < t.avds.length; i++) {
+        var a = t.avds[i]
+        out.push({ type: "action", icon: a.running ? "\uf04d" : "\uf04b", label: a.name,
+                   detail: (a.detail || "") + (a.running ? " · Enter stops it" : " · Enter starts it"),
+                   action: a.running ? "avdstop" : "avd", avd: a.name, serial: a.serial || "" })
+      }
+    }
+    return out
+  }
+
   function soonRows() {
     for (var i = 0; i < pageRows.length; i++)
       if (pageRows[i].page === page)
@@ -421,6 +606,9 @@ Panel {
     if (page === "deeplink") return "Type a URL, Enter launches · ↑/↓ recent · Esc back"
     if (page === "toggles") return "j/k move · Enter flips · r reads again · Esc back"
     if (page === "capture") return "j/k move · Enter runs it · Esc back"
+    if (page === "apks") return "Type a folder · ↑/↓ move · Enter installs · r lists again · Esc back"
+    if (page === "text") return "Type a line, Enter sends it · ↑/↓ move · Esc back"
+    if (page === "tools") return "j/k move · Enter runs it · r reads again · Esc back"
     return "Esc or Backspace back"
   }
 
@@ -495,6 +683,14 @@ Panel {
     else if (row.action === "toggle") act(["toggle", row.name])
     else if (row.action === "screenshot") act(["screenshot"])
     else if (row.action === "record") { if (service && typeof service.toggleRecording === "function") service.toggleRecording() }
+    else if (row.action === "install") installApks([row.path])
+    else if (row.action === "installall") installApks(row.paths)
+    else if (row.action === "text") act(["text", "send", row.text])
+    else if (row.action === "clipboard") act(["text", "clipboard"])
+    else if (row.action === "scrcpy") act(["tool", "scrcpy"])
+    else if (row.action === "logcat") act(["tool", "logcat"].concat(row.pkg ? [row.pkg] : []))
+    else if (row.action === "avd") act(["tool", "avd", row.avd], function() { if (root.page === "tools") root.store.refreshTools() })
+    else if (row.action === "avdstop") openConfirm(row)
     else if (row.page) push({ page: row.page })
   }
 
@@ -517,25 +713,41 @@ Panel {
     })
   }
 
-  // ---- The uninstall dialog -----------------------------------------------
+  // ---- The confirm dialog -------------------------------------------------
+  // Uninstall (the `confirmUninstall` setting) and stopping an emulator ask
+  // first. The row that asked is kept; Cancel is preselected.
   property bool confirmOpen: false
-  property string confirmPkg: ""
+  property var confirmRow: null
+  readonly property string confirmMessage: !confirmRow ? ""
+    : confirmRow.action === "avdstop" ? "Stop " + confirmRow.avd + "? The emulator shuts down; unsaved state may be lost."
+    : "Uninstall " + (confirmRow.pkg || "") + "? This will remove the app and all its data from the device."
+  readonly property string confirmText: confirmRow && confirmRow.action === "avdstop" ? "Stop" : "Uninstall"
 
   function openConfirm(row) {
-    confirmPkg = row.pkg
+    confirmRow = row
     confirmDialog.selectedIndex = 0
     confirmOpen = true
   }
 
   function cancelConfirm() {
     confirmOpen = false
-    confirmPkg = ""
+    confirmRow = null
   }
 
   function acceptConfirm() {
-    var pkg = confirmPkg
+    var row = confirmRow
     cancelConfirm()
-    if (pkg !== "") uninstall(pkg)
+    if (!row) return
+    if (row.action === "avdstop") act(["tool", "avd-stop", row.serial], function() { if (root.page === "tools") root.store.refreshTools() })
+    else if (row.pkg) uninstall(row.pkg)
+  }
+
+  // The Running/Stopped state of the AVD rows follows the tracker: a stopped
+  // emulator leaves the device list a few seconds after `emu kill` (it saves
+  // its snapshot first), a started one joins it when it boots.
+  Connections {
+    target: root.store
+    function onDevicesChanged() { if (root.opened && root.page === "tools") root.store.refreshTools() }
   }
 
   onOpenedChanged: {
@@ -607,7 +819,10 @@ Panel {
           anchors.rightMargin: Style.space(8)
           foreground: root.contentForeground
           font.family: root.contentFontFamily
-          placeholderText: root.page === "deeplink" ? "URL or deep link, then Enter" : "Filter packages"
+          placeholderText: root.page === "deeplink" ? "URL or deep link, then Enter"
+            : root.page === "apks" ? "Folder with .apk files"
+            : root.page === "text" ? "Text to type on the device, then Enter"
+            : "Filter packages"
 
           Keys.onPressed: function(event) {
             if (event.key === Qt.Key_Escape) {
@@ -844,15 +1059,15 @@ Panel {
         }
       }
 
-      // Uninstall asks first (the `confirmUninstall` setting). Keys reach
-      // it through pageArea while the catcher is blocked.
+      // Uninstall and Stop emulator ask first. Keys reach the dialog
+      // through pageArea while the catcher is blocked.
       ConfirmDialog {
         id: confirmDialog
         anchors.fill: parent
         z: 10
         opened: root.confirmOpen
-        message: "Uninstall " + root.confirmPkg + "? This will remove the app and all its data from the device."
-        confirmText: "Uninstall"
+        message: root.confirmMessage
+        confirmText: root.confirmText
         foreground: root.contentForeground
         fontFamily: root.contentFontFamily
         onCanceled: root.cancelConfirm()

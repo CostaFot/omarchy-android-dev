@@ -4,7 +4,8 @@ import Quickshell.Io
 
 // The data side of the plugin: runs bin/omarchy-android-dev, one process at
 // a time, and holds what the last documents said (adb, devices, the
-// selected serial, packages, toggles, the status page). Nothing here draws
+// selected serial, packages, toggles, the APK folder, the tools, the
+// status page). Nothing here draws
 // and nothing here runs adb: the helper does every adb call with a serial,
 // a deadline and a byte cap, and formats every string. This object parses
 // one JSON line per run and keeps it.
@@ -75,6 +76,10 @@ QtObject {
   property string lastPackage: ""
   property var recentDeeplinks: []
   property var toggles: null
+  // The last `apk list` document (dir, exists, apks[]) and the last `tools`
+  // one (what is installed, the AVDs with Running or Stopped).
+  property var apkList: null
+  property var toolsInfo: null
   property string lastError: ""
   property string lastErrorCode: ""
   // True once any document has landed (the first `status` after load).
@@ -119,6 +124,8 @@ QtObject {
   function refreshPackages() { run(["packages"], null) }
   function fetchPackage(pkg) { run(["package", String(pkg)], null) }
   function refreshToggles() { run(["toggles"], null) }
+  function listApks(dir) { run(dir ? ["apk", "list", String(dir)] : ["apk", "list"], null) }
+  function refreshTools() { run(["tools"], null) }
 
   // The toggles were read from one device; another selection makes them
   // stale until the page reads again.
@@ -274,6 +281,8 @@ QtObject {
                        system_apps: d.system_apps === true, last_package: d.last_package || "" }
     }
     if (d.toggles && typeof d.toggles === "object") toggles = d.toggles
+    if (d.command === "apk" && Array.isArray(d.apks)) apkList = d
+    if (d.command === "tools" && Array.isArray(d.avds)) toolsInfo = d
     if (Array.isArray(d.recent_deeplinks)) recentDeeplinks = d.recent_deeplinks
     if (d.last_package !== undefined) lastPackage = d.last_package ? String(d.last_package) : ""
     if (d.command === "package" && d.ok !== false && d.name) {

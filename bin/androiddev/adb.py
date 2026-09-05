@@ -221,6 +221,11 @@ def run_bounded(argv, timeout=DEFAULT_TIMEOUT, cap=fmt.CAP_DEFAULT, stdin=None):
     except subprocess.TimeoutExpired:
         timed_out = True
         _kill(proc)
+    except BaseException:
+        # The whole-run alarm (cli.Deadline) or a Ctrl-C: the child must not
+        # go on without us (an `adb install` would otherwise finish unseen).
+        _kill(proc)
+        raise
     t_out.join(timeout=2)
     t_err.join(timeout=2)
     stderr = fmt.clean(bytes(err["data"]).decode("utf-8", errors="replace").strip(), 4096)

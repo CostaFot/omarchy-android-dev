@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -31,6 +32,23 @@ RECORDER = """#!/usr/bin/python3
 import json, os, sys
 with open(os.environ["RECORDER_LOG"], "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "stdin": sys.stdin.buffer.read(64).hex() if not sys.stdin.isatty() else ""}) + "\\n")
+"""
+
+# A fake scrcpy / emulator / terminal / wl-paste: logs its argv to RECORDER_LOG
+# under `tool`, answers from a rule list [match, stdout, code, sleep] baked in.
+FAKE_TOOL = """#!/usr/bin/python3
+import json, os, sys, time
+argv = sys.argv[1:]
+with open({log!r}, "a") as f:
+    f.write(json.dumps({{"tool": {name!r}, "argv": argv}}) + "\\n")
+for match, stdout, code, sleep in {rules!r}:
+    if match is None or match in " ".join(argv):
+        sys.stdout.write(stdout)
+        sys.stdout.flush()
+        if sleep:
+            time.sleep(sleep)
+        sys.exit(code)
+sys.exit(0)
 """
 
 # The bytes the fake adb prints for `exec-out screencap -p`: the PNG signature and some padding.
@@ -67,6 +85,12 @@ class FakeAdbCase(unittest.TestCase):
             "ANDROID_ADB_SERVER_PORT": "9",
             "OMARCHY_SCREENSHOT_DIR": os.path.join(self.tmp.name, "shots"),
             "OMARCHY_SCREENRECORD_DIR": os.path.join(self.tmp.name, "casts"),
+            # Nothing installed unless a test says so; no uwsm-app wrapper.
+            "OMARCHY_ANDROID_DEV_SCRCPY": "/nonexistent",
+            "OMARCHY_ANDROID_DEV_EMULATOR": "/nonexistent",
+            "OMARCHY_ANDROID_DEV_TERMINAL": "/nonexistent",
+            "OMARCHY_ANDROID_DEV_WL_PASTE": "/nonexistent",
+            "OMARCHY_ANDROID_DEV_LAUNCHER": "",
         }
         cleared = ["ANDROID_HOME", "ANDROID_SDK_ROOT", "OMARCHY_ANDROID_DEV_DEBUG", "OMARCHY_ANDROID_DEV_TOTAL_BUDGET",
                    "XDG_PICTURES_DIR", "XDG_VIDEOS_DIR"]
@@ -103,6 +127,27 @@ class FakeAdbCase(unittest.TestCase):
 
     def joined_calls(self):
         return [" ".join(c) for c in self.calls()]
+
+    def fake_tool(self, name, rules=None, env_var=None):
+        """Write a fake tool script; `rules` is a list of (match, stdout, code,
+        sleep). With `env_var` the override is pointed at it for this test."""
+        path = os.path.join(self.tmp.name, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(FAKE_TOOL.format(log=self.recorder_log, name=name, rules=[list(r) for r in (rules or [(None, "", 0, 0)])]))
+        os.chmod(path, 0o700)
+        if env_var:
+            os.environ[env_var] = path
+        return path
+
+    def tool_calls(self, name=None, wait=0):
+        """The fake tools' argv lists, optionally one tool's, waiting up to
+        `wait` seconds for a detached launch to have written its line."""
+        deadline = time.monotonic() + wait
+        while True:
+            out = [r["argv"] for r in self.recorded() if "tool" in r and (name is None or r["tool"] == name)]
+            if out or time.monotonic() >= deadline:
+                return out
+            time.sleep(0.05)
 
     def recorded(self):
         """What the notifier and wl-copy recorders saw, in order."""

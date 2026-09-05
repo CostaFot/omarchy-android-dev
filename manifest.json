@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "costafot.android-dev",
   "name": "Android Dev",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": "CostaFot",
   "license": "MIT",
   "description": "The Android developer's side of a device, on the bar: adb devices, packages and their actions, developer toggles, screenshots, deep links, APKs, the emulator, scrcpy and logcat.",
@@ -17,7 +17,7 @@
   },
   "barWidget": {
     "displayName": "Android Dev",
-    "description": "adb for the Android developer: devices, packages, toggles, screenshots. Click for the panel.",
+    "description": "adb for the Android developer: devices, packages, toggles, screenshots, APKs, emulators. Click for the panel.",
     "category": "Development",
     "aliases": [
       "adb",

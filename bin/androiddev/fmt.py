@@ -103,6 +103,11 @@ def device_detail(kind, state):
     return f"{kind_text} · {state_text}" if state_text else kind_text
 
 
+def avd_detail(serial):
+    """`Running · emulator-5554` or `Stopped`: the Tools page's line under an AVD."""
+    return f"Running · {clean(serial)}" if serial else "Stopped"
+
+
 def display_path(path):
     home = os.path.expanduser("~")
     p = str(path or "")

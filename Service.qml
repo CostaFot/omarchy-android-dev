@@ -342,9 +342,11 @@ Item {
   // user how it went. The panel shows the store's notice on its own; the
   // notification is for the terminal and for the panel being closed. The
   // helper's own notification (screenshots) is not doubled.
-  function act(args, onDone) {
+  // `silent` skips the notification (the APK page's Install all sends one
+  // summary instead of one per file).
+  function act(args, onDone, silent) {
     store.run(args, function(doc) {
-      if (args[0] !== "screenshot" && store.notifyEnabled) {
+      if (args[0] !== "screenshot" && store.notifyEnabled && silent !== true) {
         var dev = store.selectedDevice
         if (doc && doc.ok !== false && doc.notice) notify(String(doc.notice), dev ? dev.label : "")
         else if (store.lastError !== "") notify(store.lastError, dev ? dev.label : "")
@@ -360,6 +362,18 @@ Item {
   function validPackage(pkg) {
     var p = String(pkg || "").trim()
     return p !== "" && p.length <= 256 && /^[A-Za-z0-9_.]+$/.test(p) ? p : ""
+  }
+
+  // One line of printable ASCII, 500 characters at most: what `input text`
+  // types. The helper checks again and says why when it refuses.
+  function validText(text) {
+    var t = String(text || "")
+    return t !== "" && t.length <= 500 && /^[\x20-\x7e]+$/.test(t)
+  }
+
+  function validAvd(name) {
+    var n = String(name || "").trim()
+    return /^[A-Za-z0-9._-]{1,64}$/.test(n) ? n : ""
   }
 
   // ---- Panel routing ---------------------------------------------------------
@@ -419,7 +433,7 @@ Item {
     "omarchy-shell costafot.android-dev <verb> [args]",
     "  help                 this list",
     "  open | close | toggle  the panel (show/hide are aliases)",
-    "  page NAME            open the panel on a page: hub devices packages deeplink toggles capture",
+    "  page NAME            open the panel on a page: hub devices packages deeplink toggles capture apks text tools",
     "  status               one JSON line: adb, devices, tracker, errors",
     "  devices              one JSON line: the attached devices",
     "  select SERIAL        make SERIAL the selected device",
@@ -430,6 +444,11 @@ Item {
     "  screenshot           screenshot of the selected device: file, clipboard, notification",
     "  record start|stop|toggle  screen recording of the selected device; stop pulls the mp4 to the videos folder",
     "  flip NAME            flip a developer toggle: animations touches pointer layout airplane wifi data bluetooth",
+    "  text TEXT            type TEXT on the selected device (input text: one line of ASCII)",
+    "  clipboard            type the clipboard (wl-paste) on the selected device",
+    "  scrcpy               mirror the selected device with scrcpy",
+    "  avd NAME             start that emulator (refused while it runs)",
+    "  logcat [PKG]         adb logcat in a terminal, following PKG's process when given",
     "  refresh              re-read adb and the device list",
     "Action verbs return at once; the result arrives as a notification and in the panel."
   ]
@@ -489,6 +508,23 @@ Item {
       if (m === "stop") return root.stopRecording()
       if (m === "" || m === "toggle") return root.toggleRecording()
       return "record takes start, stop or toggle"
+    }
+    function text(text: string): string {
+      var t = String(text || "")
+      if (!root.validText(t)) return "text needs one line of printable ASCII, 500 characters at most"
+      return root.act(["text", "send", t])
+    }
+    function clipboard(): string { return root.act(["text", "clipboard"]) }
+    function scrcpy(): string { return root.act(["tool", "scrcpy"]) }
+    function avd(name: string): string {
+      var n = root.validAvd(name)
+      return n === "" ? "avd needs an AVD name" : root.act(["tool", "avd", n])
+    }
+    function logcat(pkg: string): string {
+      var p = String(pkg || "").trim()
+      if (p === "") return root.act(["tool", "logcat"])
+      var v = root.validPackage(p)
+      return v === "" ? "logcat takes a package name, or nothing for the whole log" : root.act(["tool", "logcat", v])
     }
     function refresh(): string { root.store.refreshStatus(); return "requested" }
   }

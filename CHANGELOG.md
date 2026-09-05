@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- **APKs**: a folder box prefilled from the `apkDir` setting lists the `.apk` files in it as you type; Enter on one installs it (`adb install -r -t`, so a debug build marked testOnly installs too) and the row says Installed or quotes adb's `Failure [...]`; **Install all** runs the files one after another, each its own helper run, with one summary notification.
+- **Send text**: type a line and press Enter to have it typed into the focused field on the device (`input text`, spaces as `%s`, the rest quoted for the device shell), or send the clipboard through `wl-paste`. Non-ASCII, line breaks and more than 500 characters are refused with a plain message rather than typed wrong. IPC `text TEXT` and `clipboard`.
+- **Tools**: Mirror with scrcpy (`scrcpy -s SERIAL --window-title "Android Dev"` plus the `scrcpyArgs` setting; the row appears once scrcpy is installed, no restart needed), Logcat for the last package (`adb logcat --pid=…` in the default terminal through `xdg-terminal-exec`, the way Omarchy opens one), and one row per AVD showing Running or Stopped: Enter starts a stopped one (`emulator -avd NAME`, refused while it runs) and stops a running one (`adb emu kill`) behind the same confirm dialog as Uninstall. Everything launched here is detached and, with `uwsm-app` present, given its own scope outside the shell's, so a shell restart cannot take it down; the plugin never signals it. The AVD rows follow the device tracker, so Running turns into Stopped once the emulator is really gone. IPC `scrcpy`, `avd NAME`, `logcat [PKG]`; `page` accepts `apks text tools`.
+- Helper: `apk list [DIR]`, `apk install PATH...`, `text send TEXT`, `text clipboard`, `tools`, `tool scrcpy|avd NAME|avd-stop SERIAL|logcat [PKG]`; `status.tools` gains `wl_paste` and `status` names the APK folder; a new error code `no_tool` for a missing scrcpy, emulator, terminal or wl-paste. A helper run that hits its whole-process budget now kills the adb call in flight instead of leaving it to finish unseen.
+- 126 offline tests, with fake scrcpy, emulator, terminal and wl-paste scripts next to the fake adb.
+
 ## 0.4.0
 
 - **Toggles**: the eight developer toggles (Animations, Show touches, Pointer location, Layout bounds, Airplane mode, Wi-Fi, Mobile data, Bluetooth) as rows with their state read from the device in one call; Enter flips one and every row repaints from the answer. Airplane mode goes through `cmd connectivity` on API 30 and up. IPC `flip NAME` (`toggle` is the panel verb).

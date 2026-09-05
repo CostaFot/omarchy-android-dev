@@ -14,7 +14,7 @@ import _paths  # noqa: F401
 from _paths import FAKE_ADB, HELPER, PNG_HEX, SERIAL, FakeAdbCase, fixture
 
 from androiddev import wireless
-from androiddev.adb import Adb, Result
+from androiddev.adb import Adb, AdbError, Result
 
 USB = "ZY22ABCDEF"
 WIFI = "192.168.1.5:5555"
@@ -264,6 +264,8 @@ class GoWireless(FakeAdbCase):
             {"match": f"connect {WIFI}", "stdout": f"connected to {WIFI}\n"},
             {"match": f"-s {WIFI} get-state", "stdout": "device\n"},
             {"match": f"-s {WIFI} usb", "stdout": "restarting in USB mode\n"},
+            {"match": f"-s {USB} usb", "stdout": "restarting in USB mode\n"},
+            {"match": f"disconnect {WIFI}", "stdout": f"disconnected {WIFI}\n"},
         )
 
     def test_tcpip_connects_and_selects_the_wifi_entry(self):
@@ -306,7 +308,11 @@ class GoWireless(FakeAdbCase):
         doc = self.run_cli("usb", WIFI)
         self.assertTrue(doc["ok"], doc)
         self.assertEqual(doc["notice"], f"Back to USB: Pixel 7 ({WIFI})")
-        self.assertIn(["-s", WIFI, "usb"], self.calls())
+        calls = self.calls()
+        self.assertIn(["-s", WIFI, "usb"], calls)
+        # The dead entry is disconnected right after, or adb keeps it `offline` for minutes.
+        self.assertLess(calls.index(["-s", WIFI, "usb"]), calls.index(["disconnect", WIFI]))
+        self.assertEqual(doc["disconnected"], [WIFI])
         self.assertEqual(doc["selected"], USB)
         with open(os.path.join(self.state_dir, "state.json"), encoding="utf-8") as f:
             self.assertEqual(json.load(f)["selected"], USB)
@@ -316,7 +322,6 @@ class GoWireless(FakeAdbCase):
     def test_usb_on_the_plugged_entry_keeps_the_selection(self):
         # `usb` names the USB phone itself (or `usb ""` over IPC resolves to it): the phone is still
         # on the cable, so the selection stays. Before 1.3.2 it was cleared and the hub said No device.
-        self.add_rules({"match": f"-s {USB} usb", "stdout": "restarting in USB mode\n"})
         self.run_cli("select", USB)
         for args in ((USB,), ()):
             doc = self.run_cli("usb", *args)
@@ -327,11 +332,63 @@ class GoWireless(FakeAdbCase):
             with open(os.path.join(self.state_dir, "state.json"), encoding="utf-8") as f:
                 self.assertEqual(json.load(f)["selected"], USB)
         self.assertEqual(self.calls().count(["-s", USB, "usb"]), 2)
+        # With no ip:port entry there is nothing to disconnect and no address to read.
+        self.assertFalse(any(c[0] == "disconnect" or "ip route" in " ".join(c) for c in self.calls()))
         # A Wi-Fi entry that is not the selection moves nothing either.
         self.add_rules({"match": "devices -l", "stdout": HEADER + PHONE_LINE + WIFI_LINE})
         doc = self.run_cli("usb", WIFI)
         self.assertTrue(doc["ok"], doc)
         self.assertEqual(doc["selected"], USB)
+        self.assertEqual(doc["disconnected"], [WIFI])
+
+    def test_usb_on_the_plugged_entry_drops_its_dead_wifi_entries(self):
+        # The phone's own ip:port entry (its Wi-Fi address, read before adbd restarts) is disconnected;
+        # another phone's is not; an mDNS-named entry is adb's own to find again. A dropped selection
+        # moves to the phone on the cable.
+        other = "192.168.1.9:5555      device product:oriole model:Pixel_6 device:oriole transport_id:6\n"
+        self.add_rules({"match": "devices -l", "stdout": HEADER + PHONE_LINE + WIFI_LINE + other + MDNS_LINE},
+                       {"match": f"-s {MDNS_SERIAL} usb", "stdout": "restarting in USB mode\n"})
+        self.run_cli("select", WIFI)
+        doc = self.run_cli("usb", USB)
+        self.assertTrue(doc["ok"], doc)
+        calls = self.calls()
+        self.assertLess(calls.index(["-s", USB, "shell", "ip", "route"]), calls.index(["-s", USB, "usb"]))
+        self.assertLess(calls.index(["-s", USB, "usb"]), calls.index(["disconnect", WIFI]))
+        self.assertEqual(doc["disconnected"], [WIFI])
+        self.assertEqual(doc["selected"], USB)
+        with open(os.path.join(self.state_dir, "state.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["selected"], USB)
+        self.assertNotIn(["disconnect", "192.168.1.9:5555"], calls)
+        # Back to USB on the mDNS-named entry: adb usb, and no disconnect.
+        doc = self.run_cli("usb", MDNS_SERIAL)
+        self.assertTrue(doc["ok"], doc)
+        self.assertEqual(doc["disconnected"], [])
+        self.assertIn(["-s", MDNS_SERIAL, "usb"], self.calls())
+        self.assertEqual(self.calls().count(["disconnect", WIFI]), 1)
+
+    def test_a_failed_disconnect_does_not_fail_back_to_usb(self):
+        self.add_rules({"match": "devices -l", "stdout": HEADER + PHONE_LINE + WIFI_LINE},
+                       {"match": f"disconnect {WIFI}", "stdout": "", "stderr": "error: no such device\n", "code": 1})
+        doc = self.run_cli("usb", WIFI)
+        self.assertTrue(doc["ok"], doc)
+        self.assertEqual(doc["notice"], f"Back to USB: Pixel 7 ({WIFI})")
+        self.add_rules({"match": f"disconnect {WIFI}", "stdout": "", "stderr": "error: something else\n", "code": 1})
+        self.assertTrue(self.run_cli("usb", WIFI)["ok"])
+
+    def test_go_wireless_stops_retrying_when_a_try_would_outlive_the_budget(self):
+        # Every connect fails at once here; with 8 s of budget no second try fits (a try can take 13 s
+        # on a LAN that drops packets), so the answer is the specific error with the address that
+        # listens, not the bare `timeout` the alarm used to produce after 20 s of retries.
+        self.add_rules({"match": f"connect {WIFI}", "stdout": f"failed to connect to {WIFI}\n"})
+        started = time.monotonic()
+        doc = self.run_cli("tcpip", env={"OMARCHY_ANDROID_DEV_TOTAL_BUDGET": "8"})
+        self.assertLess(time.monotonic() - started, 6.0)
+        self.assertFalse(doc["ok"])
+        self.assertEqual(doc["error"]["code"], "adb_failed")
+        self.assertIn(f"listens on {WIFI}", doc["error"]["message"])
+        self.assertIn("failed to connect", doc["error"]["message"])
+        self.assertEqual(self.calls().count(["connect", WIFI]), 1)
+        self.assertEqual(self.calls().count(["-s", USB, "tcpip", "5555"]), 1)
 
 
 class Status(FakeAdbCase):
@@ -341,6 +398,7 @@ class Status(FakeAdbCase):
         doc = self.run_cli("wireless")
         self.assertTrue(doc["ok"], doc)
         self.assertTrue(doc["mdns"]["available"])
+        self.assertTrue(doc["mdns"]["supported"])
         self.assertIn("mdns daemon version", doc["mdns"]["text"])
         self.assertEqual([s["kind"] for s in doc["services"]], ["pairing", "connect"])
         self.assertFalse(doc["services"][1]["attached"])
@@ -366,9 +424,39 @@ class Status(FakeAdbCase):
         doc = self.run_cli("wireless")
         self.assertTrue(doc["ok"], doc)
         self.assertFalse(doc["mdns"]["available"])
+        self.assertIs(doc["mdns"]["supported"], False)
         self.assertIn("pair with a code", doc["mdns"]["text"])
         self.assertEqual(doc["services"], [])
         self.assertFalse(any("mdns services" in c for c in self.joined_calls()))
+
+    def test_a_dead_server_is_not_no_mdns(self):
+        # `mdns check` failing for any other reason is adb's own line as `adb_failed`, with the page's
+        # lists still there; before 1.3.3 it was the missing-mDNS text, which tells the user to change
+        # adbPath (seen on the SDK adb after `adb kill-server`).
+        self.add_rules({"match": "mdns check", "stdout": "", "stderr": "error: cannot connect to daemon\n", "code": 1},
+                       {"match": "devices -l", "stdout": HEADER + PHONE_LINE})
+        doc = self.run_cli("wireless")
+        self.assertFalse(doc["ok"])
+        self.assertEqual(doc["error"]["code"], "adb_failed")
+        self.assertIn("cannot connect to daemon", doc["error"]["message"])
+        self.assertFalse(doc["mdns"]["available"])
+        self.assertIsNone(doc["mdns"]["supported"])
+        self.assertEqual(doc["mdns"]["text"], doc["error"]["message"])
+        self.assertNotIn("adbPath", doc["mdns"]["text"])
+        self.assertEqual([d["serial"] for d in doc["usb_devices"]], [USB])
+        self.assertEqual(doc["services"], [])
+        self.assertFalse(any("mdns services" in c for c in self.joined_calls()))
+
+    def test_a_failing_device_list_asks_adb_nothing_more(self):
+        # The page's error path used to run the mDNS check and the services listing against the adb
+        # that had just failed: two more calls, up to 10 s, before the error reached the panel.
+        self.add_rules({"match": "devices -l", "stdout": "", "stderr": "error: cannot connect to daemon\n", "code": 1})
+        doc = self.run_cli("wireless")
+        self.assertFalse(doc["ok"])
+        self.assertEqual(doc["error"]["code"], "adb_failed")
+        self.assertIsNone(doc["mdns"]["supported"])
+        self.assertIsNone(doc["mdns"]["text"])
+        self.assertFalse(any("mdns" in c for c in self.joined_calls()))
 
     def test_without_adb(self):
         doc = self.run_cli("wireless", env={"OMARCHY_ANDROID_DEV_PATH": "/nonexistent"})
@@ -516,6 +604,17 @@ class PairQr(FakeAdbCase):
         self.assertEqual(self.tool_calls("qrencode"), [])
         self.assertEqual(self.pngs(), [])
 
+    def test_a_dead_server_is_its_own_error_not_no_mdns(self):
+        self.add_rules({"match": "mdns check", "stdout": "", "stderr": "error: cannot connect to daemon\n", "code": 1})
+        proc = self.start()
+        out, _ = proc.communicate(timeout=10)
+        doc = json.loads(out.splitlines()[0])
+        self.assertEqual(doc["event"], "error")
+        self.assertEqual(doc["error"]["code"], "adb_failed")
+        self.assertIn("cannot connect to daemon", doc["error"]["message"])
+        self.assertNotIn("pair with a code", doc["error"]["message"])
+        self.assertEqual(self.pngs(), [])
+
     def test_no_qrencode_is_no_tool(self):
         os.environ["OMARCHY_ANDROID_DEV_QRENCODE"] = "/nonexistent"
         proc = self.start()
@@ -583,6 +682,28 @@ class Direct(FakeAdbCase):
         ok, text = wireless.mdns_available(adb)
         self.assertFalse(ok)
         self.assertIn("mDNS", text)
+        self.add_rules({"match": "mdns check", "stdout": "", "stderr": "error: cannot connect to daemon\n", "code": 1})
+        with self.assertRaises(AdbError) as caught:
+            wireless.mdns_available(adb)
+        self.assertEqual(caught.exception.code, "adb_failed")
+        self.assertIn("cannot connect to daemon", caught.exception.message)
+        self.assertNotIn("adbPath", caught.exception.message)
+
+    def test_go_wireless_retries_through_its_window_without_an_alarm(self):
+        # No alarm armed in this process (time_left() is None), so the window alone bounds the retries.
+        adb = Adb(FAKE_ADB, "override", None)
+        self.add_rules({"match": f"-s {USB} shell ip route", "stdout_file": "ip_route.txt"},
+                       {"match": f"-s {USB} tcpip 5555", "stdout": "restarting in TCP mode port: 5555\n"},
+                       {"match": f"connect {WIFI}", "stdout": f"failed to connect to {WIFI}\n"})
+        for name, value in (("TCPIP_WINDOW", 2.5), ("TCPIP_SETTLE", 0.0)):
+            self.addCleanup(setattr, wireless, name, getattr(wireless, name))
+            setattr(wireless, name, value)
+        self.assertIsNone(wireless.time_left())
+        with self.assertRaises(AdbError) as caught:
+            wireless.go_wireless(adb, USB, None, "Pixel 7")
+        self.assertEqual(caught.exception.code, "adb_failed")
+        self.assertIn(f"listens on {WIFI}", caught.exception.message)
+        self.assertGreaterEqual(self.calls().count(["connect", WIFI]), 2)
 
 
 if __name__ == "__main__":

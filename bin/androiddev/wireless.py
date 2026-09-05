@@ -36,7 +36,7 @@ import sys
 import time
 
 from . import devices as devmod, fmt, tools as toolsmod
-from .adb import AdbError, die_with_parent, run_bounded
+from .adb import AdbError, PartialError, die_with_parent, run_bounded
 from .capture import PNG_MAGIC
 
 PAIRING_SERVICE = "_adb-tls-pairing._tcp"
@@ -48,6 +48,7 @@ STATE_WAIT = 3.0          # get-state polling after a connect
 STATE_POLL = 0.3
 TCPIP_SETTLE = 1.5        # adbd restarts after `tcpip`; dori's pause
 TCPIP_WINDOW = 20.0       # connect retries after `tcpip`
+ATTEMPT_COST = CONNECT_TIMEOUT + STATE_WAIT + 2.0   # the most one connect try can take, with a margin
 NEW_DEVICE_WAIT = 8.0     # a paired phone shows up in `devices -l` within this
 MDNS_POLL = 1.0
 PAIR_WINDOW = 120         # seconds the code stays up
@@ -147,17 +148,30 @@ def parse_mdns_services(text):
 
 
 def mdns_available(adb):
-    """(True, `mdns daemon version …`) or (False, why). Arch's android-tools
-    adb answers `mdns is not supported by this version of adb`."""
-    try:
-        result = adb.run(["mdns", "check"], timeout=5, check=False)
-    except AdbError as e:
-        return False, e.message
+    """(True, `mdns daemon version …`) when this adb has mDNS; (False,
+    fmt.MDNS_MISSING_TEXT) when it says so (Arch's android-tools adb answers
+    `mdns is not supported by this version of adb`). Anything else (a server
+    that died under it, a timeout) raises `adb_failed` with adb's own line:
+    that adb may well have mDNS, and the missing-mDNS text tells the user to
+    change adbPath (seen on the SDK adb after `adb kill-server`)."""
+    result = adb.run(["mdns", "check"], timeout=5, check=False)
     text = " ".join(result.lines()).strip()
     low = (text + " " + result.stderr).lower()
-    if result.code == 0 and text and "not supported" not in low:
+    if "not supported" in low:
+        return False, fmt.MDNS_MISSING_TEXT
+    if result.code == 0 and text:
         return True, fmt.clean(text)
-    return False, fmt.MDNS_MISSING_TEXT
+    why = result.stderr.strip() or text or f"exit {result.code}"
+    raise AdbError("adb_failed", f"adb mdns check: {fmt.clean(why)}", result.stderr)
+
+
+def time_left():
+    """Seconds before the whole-run alarm fires (cli arms it); None without one."""
+    try:
+        left, _ = signal.getitimer(signal.ITIMER_REAL)
+    except (AttributeError, OSError):
+        return None
+    return left if left > 0 else None
 
 
 def services(adb, pdeathsig=False):
@@ -509,7 +523,12 @@ def go_wireless(adb, serial, state, label=None, port=DEFAULT_PORT):
             payload = connect(adb, address)
             break
         except AdbError as e:
-            if e.code == "unauthorized" or time.monotonic() >= deadline:
+            # Retry within the window, and only while a whole try still fits in the run's budget:
+            # a try started at 51 s ran past the 60 s alarm and the answer was the bare `timeout`,
+            # with the address that does listen lost (every connect takes its full 10 s on a LAN
+            # that drops packets). The first try is always made.
+            left = time_left()
+            if e.code == "unauthorized" or time.monotonic() >= deadline or (left is not None and left < ATTEMPT_COST):
                 raise AdbError(e.code, f"The phone listens on {address}, but: {e.message}", e.stderr) from e
             time.sleep(1.0)
     state.select(address)
@@ -519,21 +538,40 @@ def go_wireless(adb, serial, state, label=None, port=DEFAULT_PORT):
 
 def back_to_usb(adb, target, devices, state):
     """`adb -s SERIAL usb` on `target` (a device entry): adbd listens on USB
-    again and the Wi-Fi entry drops. When that Wi-Fi entry was the
-    selection it moves to the one USB phone left, or clears. Naming the
-    plugged entry itself leaves the selection alone: the phone is still on
-    the cable (before 1.3.2 `usb ""` with the USB phone selected cleared it
-    and the hub said No device)."""
+    again. The phone's `ip:port` entries are dead then, and adb keeps them
+    `offline` for minutes while it retries them (seen 2026-09-06: the picker
+    showed `Wi-Fi · offline` in the urgent colour long after), so they are
+    disconnected: the one named, or, when the plugged entry is named, the
+    ones on its Wi-Fi address (read before adbd restarts). An mDNS-named
+    entry is adb's own to find again and is left alone. When a dropped entry
+    was the selection it moves to the phone on the cable (the one USB phone
+    left when a Wi-Fi entry was named, else nothing). Naming the plugged
+    entry with itself selected leaves the selection alone (before 1.3.2
+    `usb ""` cleared it and the hub said No device)."""
     serial = target["serial"]
+    if target["kind"] == "wifi":
+        stale = [serial] if ":" in serial else []
+    else:
+        tcp = [d["serial"] for d in devices if d["kind"] == "wifi" and ":" in d["serial"]]
+        ip = device_ip(adb, serial) if tcp else None
+        stale = [s for s in tcp if ip and s.rsplit(":", 1)[0] == ip]
     result = adb.run(["usb"], serial=serial, timeout=10, check=False)
     if result.code != 0 or "error" in result.stderr.lower():
         raise AdbError("adb_failed", f"adb usb failed: {fmt.clean(result.stderr or result.text.strip())}", result.stderr)
-    payload = {"notice": fmt.usb_notice(target.get("label") or serial), "serial": serial}
+    for dead in stale:
+        try:
+            disconnect(adb, dead)
+        except AdbError:
+            pass  # adb drops it on its own once it gives up reconnecting
+    payload = {"notice": fmt.usb_notice(target.get("label") or serial), "serial": serial, "disconnected": stale}
     if target["kind"] == "wifi" and state.selected == serial:
         usb = [d["serial"] for d in devices if d["kind"] == "usb"]
         fallback = usb[0] if len(usb) == 1 else None
         state.select(fallback)
         payload["selected"] = fallback
+    elif target["kind"] == "usb" and state.selected in stale:
+        state.select(serial)
+        payload["selected"] = serial
     return payload
 
 
@@ -542,18 +580,23 @@ def back_to_usb(adb, target, devices, state):
 def describe(adb, state, devices):
     """The `wireless` payload: mDNS yes or no, the services on the network,
     the Wi-Fi and the plugged devices, qrencode."""
+    # `supported` is what adb said about itself: true, false (the android-tools adb), or null when
+    # the check could not be made (no adb, or `mdns check` failed: `problem` rides as the error).
+    available, text, supported, problem = False, None, None, None
     if adb is not None:
-        available, text = mdns_available(adb)
-    else:
-        available, text = False, None
+        try:
+            available, text = mdns_available(adb)
+            supported = available
+        except AdbError as e:
+            problem, text = e, e.message
     found = services(adb) if (adb is not None and available) else []
     serials = {d["serial"] for d in devices}
     instances = {devmod.mdns_instance(d["serial"]) for d in devices} - {None}
     for s in found:
         # By `ip:port`, or by the instance name adb gave an auto-connected phone.
         s["attached"] = s["address"] in serials or s["instance"] in instances
-    return {
-        "mdns": {"available": available, "text": text},
+    payload = {
+        "mdns": {"available": available, "supported": supported, "text": text},
         "services": found,
         "wifi_devices": [d for d in devices if d["kind"] == "wifi"],
         "usb_devices": [d for d in devices if d["kind"] == "usb"],
@@ -561,3 +604,6 @@ def describe(adb, state, devices):
         "port": DEFAULT_PORT,
         "pair_seconds": pair_window(),
     }
+    if problem is not None:
+        raise PartialError(payload, problem)
+    return payload

@@ -659,7 +659,9 @@ Panel {
         out.push({ type: "action", icon: wirelessGlyphs.qr, label: "Pair with a QR code",
                    detail: "The phone scans it · Wireless debugging › Pair device with QR code", action: "pairqr" })
       else if (!w.mdns || !w.mdns.available)
-        out.push({ type: "note", label: "No QR pairing: adb has no mDNS", detail: w.mdns && w.mdns.text ? w.mdns.text : "" })
+        out.push({ type: "note", label: w.mdns && w.mdns.supported === false ? "No QR pairing: adb has no mDNS"
+                                     : w.mdns && w.mdns.text ? "No QR pairing: the mDNS check failed" : "No QR pairing: mDNS not checked",
+                   detail: w.mdns && w.mdns.text ? w.mdns.text : "adb did not answer · press r to look again" })
       else
         out.push({ type: "note", label: "No QR pairing: qrencode not installed", detail: "Install the qrencode package (it is in Omarchy's base set), or pair with a code." })
       out.push({ type: "action", icon: wirelessGlyphs.key, label: "Pair with a code",

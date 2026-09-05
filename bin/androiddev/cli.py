@@ -482,7 +482,9 @@ def cmd_wireless(ctx, args):
     try:
         devices = ctx.devices()
     except AdbError as e:
-        raise PartialError(wlmod.describe(ctx.adb if ctx.adb and e.code != "no_adb" else None, ctx.state, []), e) from e
+        # Nothing more is asked of an adb that just failed: the page used to wait through two more
+        # calls (up to 10 s) against a dead server before its error showed.
+        raise PartialError(wlmod.describe(None, ctx.state, []), e) from e
     return wlmod.describe(ctx.adb, ctx.state, devices)
 
 

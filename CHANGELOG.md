@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.3
+
+- Fixed: *Back to USB* left the phone's old Wi-Fi entry in the picker as *Wi-Fi · offline*, in the urgent colour, for minutes: adb keeps retrying an address it was told to connect to. The helper disconnects the dead entry now: the one named, or, when the plugged entry is named, the ones on the phone's Wi-Fi address; an mDNS-named entry (a paired phone adb found on its own) is left for adb to find again. A dropped entry that was the selection moves to the phone on the cable. The `usb` answer lists them as `disconnected`.
+- Fixed: *Go wireless* on a network that drops packets could answer the bare *ran out of time* instead of naming the address the phone now listens on. Every connect try takes its full ten seconds there and the retries were checked only after a try, so one started late ran past the helper's budget. A retry is made only while a whole try still fits in what is left of the budget (the first is always made), and the answer is the specific error with the address.
+- Fixed: an adb whose server had just died (after `adb kill-server`, say) was reported as having no mDNS, and the Wireless page told the user to change the adb path. Only adb's own *not supported* answer means that; anything else is adb's line as an error with the page's lists still filled, and the panel's note says the check failed rather than that adb has no mDNS. The page's error path no longer runs two more calls against the adb that just failed (up to ten seconds) before its error shows. The `wireless` document's `mdns` gains `supported`: true, false, or null when the check could not be made.
+- Checked live on 2026-09-06 with the desktop's VPN letting the LAN through: Go wireless connected to the HONOR phone in under two seconds and Back to USB put it back; Costa paired it by QR code from the panel and adb connected to it on its own (the mDNS-named entry, without a trailing dot here, a form the plugin already took). The phone runs a VPN of its own and answers on its Wi-Fi address regardless. Two things worth knowing: the phone's Wireless debugging switch can read on while its server is not running (nothing on mDNS then; toggle it off and on), and a phone asleep filters multicast, so it answers no mDNS query until it is woken.
+- Tests: 196.
+
 ## 1.3.2
 
 - Fixed: the *Cancel pairing* row said Escape cancels too. Escape goes back a page everywhere and left the session running: the QR code stayed on disk for up to two minutes and a phone that scanned it meanwhile was paired unwatched. The row says so now, and the hub shows *Pairing · N s left* while a session runs, pointing at the Wireless page, like it does for a recording.

@@ -93,25 +93,6 @@ class Files(FakeAdbCase):
         self.assertEqual(s2.recent_deeplinks[0], "https://example.com/11")
         self.assertEqual(s2.last_package("emulator-5554"), "com.foo")
 
-    def test_recent_addresses_are_capped_deduped_and_validated(self):
-        s = State()
-        for i in range(12):
-            s.add_recent_address(f"192.168.1.{i}:5555")
-        s.add_recent_address("192.168.1.11:5555")
-        s.save()
-        s2 = State()
-        self.assertEqual(len(s2.recent_addresses), 10)
-        self.assertEqual(s2.recent_addresses[0], "192.168.1.11:5555")
-        self.assertEqual(s2.recent_addresses.count("192.168.1.11:5555"), 1)
-        # Anything in the file that is not host:port is dropped on load.
-        with open(os.path.join(os.environ["OMARCHY_ANDROID_DEV_STATE_DIR"], "state.json"), "r+", encoding="utf-8") as f:
-            data = json.load(f)
-            data["recent_addresses"] = ["nope nope", "[fe80::1]:5555", "192.168.1.5:5555", 7]
-            f.seek(0)
-            f.truncate()
-            json.dump(data, f)
-        self.assertEqual(State().recent_addresses, ["192.168.1.5:5555"])
-
     def test_pairing_files_are_swept(self):
         s = State()
         path = s.pairing_png_path()

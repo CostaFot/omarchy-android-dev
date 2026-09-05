@@ -47,7 +47,7 @@ Panel {
     else if (page === "toggles") store.refreshToggles()
     else if (page === "apks") { resetInstalls(); listApks() }
     else if (page === "tools") store.refreshTools()
-    else if (page === "wireless" || page === "connect" || page === "paircode") store.refreshWireless()
+    else if (page === "wireless" || page === "paircode") store.refreshWireless()
     else store.refreshStatus()
   }
 
@@ -59,15 +59,14 @@ Panel {
   readonly property var current: stack[stack.length - 1]
   readonly property string page: current.page
   readonly property bool isHub: stack.length === 1
-  readonly property bool hasField: page === "packages" || page === "deeplink" || page === "apks" || page === "text"
-    || page === "connect" || page === "paircode"
+  readonly property bool hasField: page === "packages" || page === "deeplink" || page === "apks" || page === "text" || page === "paircode"
   // The settings form replaces the row list while it shows.
   readonly property bool isSettingsForm: page === "settings"
 
   readonly property var pageTitles: ({
     hub: "Android Dev", devices: "Devices", packages: "Apps", actions: "", deeplink: "Deep link", toggles: "Toggles",
     capture: "Capture", apks: "APKs", text: "Send text", tools: "Tools", wireless: "Wireless",
-    connect: "Connect to an address", paircode: "Pair with a code", settings: "Settings"
+    paircode: "Pair with a code", settings: "Settings"
   })
   // Pages the IPC `page` verb may open straight onto.
   readonly property var ipcPages: ["hub", "devices", "packages", "deeplink", "toggles", "capture", "apks", "text", "tools", "wireless", "settings"]
@@ -115,7 +114,7 @@ Panel {
       else if (entry.page === "toggles") store.refreshToggles()
       else if (entry.page === "apks") { resetInstalls(); listApks() }
       else if (entry.page === "tools") store.refreshTools()
-      else if (entry.page === "wireless" || entry.page === "connect" || entry.page === "paircode") store.refreshWireless()
+      else if (entry.page === "wireless" || entry.page === "paircode") store.refreshWireless()
     }
     if (entry.page === "settings") loadPendingSettings()
     Qt.callLater(function() {
@@ -151,7 +150,6 @@ Panel {
     else if (page === "text") body = textRows()
     else if (page === "tools") body = toolRows()
     else if (page === "wireless") body = wirelessRows()
-    else if (page === "connect") body = connectRows()
     else if (page === "paircode") body = paircodeRows()
     else body = []  // the settings form paints itself
     for (var i = 0; i < body.length; i++) out.push(body[i])
@@ -485,7 +483,7 @@ Panel {
     }
     // What was typed is the first row on these pages; Enter should take it
     // (seen 2026-09-05: the cursor stayed on Send clipboard while typing).
-    if (page === "text" || page === "deeplink" || page === "connect" || page === "paircode")
+    if (page === "text" || page === "deeplink" || page === "paircode")
       Qt.callLater(function() { root.selectedIndex = root.firstCursorIndex() })
   }
 
@@ -628,13 +626,13 @@ Panel {
   }
 
   // ---- Wireless -----------------------------------------------------------
-  // Four ways onto Wi-Fi: a pairing QR code (a helper session the service
+  // Three ways onto Wi-Fi: a pairing QR code (a helper session the service
   // runs; the phone scans it from its Wireless debugging screen), the
   // address and six-digit code from Pair device with pairing code (two
-  // steps through the one field, the code sent on stdin), Connect to an
-  // address, and Go wireless for a plugged phone (adb tcpip 5555). The
-  // lists follow the tracker; the services on the network come from the
-  // helper's `wireless` document.
+  // steps through the one field, the code sent on stdin), and Go wireless
+  // for a plugged phone (adb tcpip 5555). A paired phone connects on its
+  // own; the ones seen on the network are rows. The lists follow the
+  // tracker; the services come from the helper's `wireless` document.
   function wirelessRows() {
     var s = root.store
     var svc = root.service
@@ -663,8 +661,6 @@ Panel {
         out.push({ type: "note", label: "No QR pairing: qrencode not installed", detail: "Install the qrencode package (it is in Omarchy's base set), or pair with a code." })
       out.push({ type: "action", icon: wirelessGlyphs.key, label: "Pair with a code",
                  detail: "The address and six digits under Wireless debugging › Pair device with pairing code", page: "paircode" })
-      out.push({ type: "action", icon: wirelessGlyphs.link, label: "Connect to an address",
-                 detail: "adb connect ip:port · for a phone paired before", page: "connect" })
     }
     out.push({ type: "header", label: "Wi-Fi devices" })
     var wifi = 0
@@ -699,28 +695,6 @@ Panel {
                  action: "tcpip", serial: p.serial, urgent: p.state !== "device" })
     }
     if (usb === 0) out.push({ type: "note", label: "None plugged in", detail: "Go wireless needs the phone on the cable once; pairing does not." })
-    return out
-  }
-
-  function connectRows() {
-    var s = root.store
-    var out = []
-    if (!s.hasAdb) {
-      out.push({ type: "note", urgent: true, label: "adb not found", detail: noAdbDetail() })
-      return out
-    }
-    if (query !== "") {
-      out.push({ type: "action", icon: wirelessGlyphs.link, label: query, detail: "adb connect · then waits until the device is ready",
-                 action: "connect", addr: query })
-    } else {
-      out.push({ type: "note", label: "Type ip:port, then Enter",
-                 detail: "The address under Wireless debugging; 5555 is used when no port is given. A phone paired before reconnects on its own while its Wireless debugging is on." })
-    }
-    if (s.recentAddresses.length > 0) {
-      out.push({ type: "header", label: "Recent" })
-      for (var i = 0; i < s.recentAddresses.length; i++)
-        out.push({ type: "action", icon: "\uf1da", label: s.recentAddresses[i], detail: "", action: "connect", addr: s.recentAddresses[i] })
-    }
     return out
   }
 
@@ -763,7 +737,6 @@ Panel {
     if (page === "text") return "Type a line, Enter sends it · ↑/↓ move · Esc back"
     if (page === "tools") return "j/k move · Enter runs it · r reads again · Esc back"
     if (page === "wireless") return "j/k move · Enter runs it · r looks again · Esc back"
-    if (page === "connect") return "Type ip:port, Enter connects · ↑/↓ recent · Esc back"
     if (page === "paircode") return "Type the address, Enter, then the code, Enter · Esc back"
     if (page === "settings") return "j/k or Tab move · Enter edits or flips · Enter on Save · Esc cancels"
     return "Esc or Backspace back"
@@ -1062,7 +1035,7 @@ Panel {
       filterField.text = ""
       act(["pair", "code", row.addr], function(doc) { if (doc && doc.ok !== false && root.page === "paircode") root.popTo("wireless") }, false, row.code + "\n")
     }
-    else if (row.action === "connect") act(["connect", row.addr], function(doc) { if (doc && doc.ok !== false && root.page === "connect") root.pop() })
+    else if (row.action === "connect") act(["connect", row.addr])
     else if (row.action === "disconnect") act(["disconnect", row.addr])
     else if (row.action === "tcpip") act(["tcpip", row.serial])
     else if (row.action === "usb") act(["usb", row.serial])
@@ -1237,7 +1210,6 @@ Panel {
           placeholderText: root.page === "deeplink" ? "URL or deep link, then Enter"
             : root.page === "apks" ? "Folder with .apk files"
             : root.page === "text" ? "Text to type on the device, then Enter"
-            : root.page === "connect" ? "ip:port, then Enter"
             : root.page === "paircode" ? (root.current.addr ? "The six-digit pairing code, then Enter" : "Pairing address ip:port, then Enter")
             : "Filter packages"
 

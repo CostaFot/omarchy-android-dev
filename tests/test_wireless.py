@@ -111,24 +111,13 @@ class Connect(FakeAdbCase):
         self.assertTrue(doc["ok"], doc)
         self.assertEqual(doc["notice"], f"Connected over Wi-Fi: {WIFI}")
         self.assertEqual(doc["state"], "device")
-        self.assertEqual(doc["recent_addresses"], [WIFI])
+        self.assertNotIn("recent_addresses", doc)
         calls = self.joined_calls()
         self.assertIn(f"connect {WIFI}", calls)
         self.assertLess(calls.index(f"connect {WIFI}"), calls.index(f"-s {WIFI} get-state"))
         self.assertIn("devices", doc)
-        with open(os.path.join(self.state_dir, "state.json"), encoding="utf-8") as f:
-            self.assertEqual(json.load(f)["recent_addresses"], [WIFI])
-        self.assertEqual(self.run_cli("wireless")["recent_addresses"], [WIFI])
-
-    def test_recent_addresses_are_capped_and_deduped(self):
-        for i in range(12):
-            addr = f"192.168.1.{i}:5555"
-            self.add_rules({"match": f"connect {addr}", "stdout": f"connected to {addr}\n"}, {"match": f"-s {addr} get-state", "stdout": "device\n"})
-            self.run_cli("connect", addr)
-        doc = self.run_cli("connect", "192.168.1.11:5555")
-        self.assertEqual(len(doc["recent_addresses"]), 10)
-        self.assertEqual(doc["recent_addresses"][0], "192.168.1.11:5555")
-        self.assertEqual(doc["recent_addresses"].count("192.168.1.11:5555"), 1)
+        # Nothing is remembered: a paired phone reconnects on its own.
+        self.assertFalse(os.path.exists(os.path.join(self.state_dir, "state.json")))
 
     def test_exit_zero_failure_is_an_error(self):
         self.add_rules({"match": f"connect {WIFI}", "stdout": f"failed to connect to '{WIFI}': Connection refused\n"})
@@ -137,7 +126,6 @@ class Connect(FakeAdbCase):
         self.assertEqual(doc["error"]["code"], "adb_failed")
         self.assertIn("refused", doc["error"]["message"])
         self.assertFalse(any("get-state" in c for c in self.joined_calls()))
-        self.assertEqual(self.run_cli("wireless")["recent_addresses"], [])
 
     def test_connected_but_offline_is_its_own_code(self):
         self.add_rules({"match": f"-s {WIFI} get-state", "stdout": "", "stderr": "error: device offline\n", "code": 1})
@@ -259,7 +247,7 @@ class GoWireless(FakeAdbCase):
         with open(os.path.join(self.state_dir, "state.json"), encoding="utf-8") as f:
             state = json.load(f)
         self.assertEqual(state["selected"], WIFI)
-        self.assertEqual(state["recent_addresses"], [WIFI])
+        self.assertNotIn("recent_addresses", state)
 
     def test_the_ip_fallback_and_no_ip_at_all(self):
         self.add_rules({"match": f"-s {USB} shell ip route", "stdout": ""}, {"match": f"-s {USB} shell ip -f inet addr show wlan0", "stdout_file": "ip_addr_wlan0.txt"},
@@ -309,7 +297,7 @@ class Status(FakeAdbCase):
         self.assertFalse(doc["qrencode"]["found"])
         self.assertEqual(doc["port"], 5555)
         self.assertEqual(doc["pair_seconds"], 120)
-        self.assertEqual(doc["recent_addresses"], [])
+        self.assertNotIn("recent_addresses", doc)
 
     def test_without_mdns_the_other_paths_stay(self):
         self.add_rules({"match": "mdns check", "stdout": "", "stderr": "adb: mdns is not supported by this version of adb.\n", "code": 1})

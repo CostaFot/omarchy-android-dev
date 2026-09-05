@@ -17,7 +17,6 @@ MAX_PERMISSIONS = 512
 MAX_AVDS = 64
 MAX_APKS = 200
 MAX_RECENT_DEEPLINKS = 10
-MAX_RECENT_ADDRESSES = 10
 MAX_MDNS_SERVICES = 32
 
 CAP_DEFAULT = 256 * 1024          # adb stdout, most commands
@@ -113,7 +112,7 @@ def avd_detail(serial):
 
 # ---- wireless debugging --------------------------------------------------------
 
-MDNS_MISSING_TEXT = ("This adb has no mDNS (the android-tools one does not): pair with a code or connect to an address instead, "
+MDNS_MISSING_TEXT = ("This adb has no mDNS (the android-tools one does not): pair with a code instead, "
                      "or point adbPath at the SDK platform-tools adb")
 QR_SCAN_TEXT = "Scan it from Developer options › Wireless debugging › Pair device with QR code"
 QR_WARNING_TEXT = "Only from that screen: a camera app reads this code as Wi-Fi credentials and can knock the phone off its network"

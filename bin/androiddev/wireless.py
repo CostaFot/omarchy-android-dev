@@ -14,7 +14,8 @@ Four ways onto Wi-Fi, all of them adb's own:
   Pair device with pairing code; the code arrives on this helper's stdin
   and goes to `adb pair`'s stdin, never on an argv.
 - `connect ADDR`: `adb connect`, which exits 0 on failure (success is the
-  text `connected to`), then `get-state` until the device is ready.
+  text `connected to`), then `get-state` until the device is ready. The
+  panel's network rows and `tcpip` use it; there is no page for typing one.
 - `tcpip [USBSERIAL]`: the pre-Android-11 way and the cable-free one:
   `adb tcpip 5555` over USB, the phone's Wi-Fi address from `ip route`,
   connect, select the Wi-Fi entry. `usb` puts adbd back on USB.
@@ -192,22 +193,17 @@ def wait_ready(adb, serial, budget=STATE_WAIT):
         time.sleep(STATE_POLL)
 
 
-def connect(adb, address, state=None):
+def connect(adb, address):
     result = adb.run(["connect", address], timeout=CONNECT_TIMEOUT, check=False)
     ok, text = classify_connect(result)
     if not ok:
         raise AdbError("adb_failed", f"adb connect: {text}", result.stderr)
-    if state is not None:
-        state.add_recent_address(address)
     ready = wait_ready(adb, address)
     if ready != "device":
         if "unauthorized" in ready:
             raise AdbError("unauthorized", f"Connected to {address}, but the phone has not authorised this computer: accept the prompt on it")
         raise AdbError("offline", f"Connected to {address}, but it is {ready or 'not ready'}: unlock the phone, or toggle Wireless debugging off and on")
-    payload = {"notice": fmt.connected_notice(address), "address": address, "state": ready}
-    if state is not None:
-        payload["recent_addresses"] = state.recent_addresses
-    return payload
+    return {"notice": fmt.connected_notice(address), "address": address, "state": ready}
 
 
 def disconnect(adb, address):
@@ -488,7 +484,7 @@ def go_wireless(adb, serial, state, label=None, port=DEFAULT_PORT):
     deadline = time.monotonic() + TCPIP_WINDOW
     while True:
         try:
-            payload = connect(adb, address, state)
+            payload = connect(adb, address)
             break
         except AdbError as e:
             if e.code == "unauthorized" or time.monotonic() >= deadline:
@@ -518,7 +514,7 @@ def back_to_usb(adb, serial, devices, state, label=None):
 
 def describe(adb, state, devices):
     """The `wireless` payload: mDNS yes or no, the services on the network,
-    the Wi-Fi and the plugged devices, the recent addresses, qrencode."""
+    the Wi-Fi and the plugged devices, qrencode."""
     if adb is not None:
         available, text = mdns_available(adb)
     else:
@@ -532,7 +528,6 @@ def describe(adb, state, devices):
         "services": found,
         "wifi_devices": [d for d in devices if d["kind"] == "wifi"],
         "usb_devices": [d for d in devices if d["kind"] == "usb"],
-        "recent_addresses": state.recent_addresses,
         "qrencode": toolsmod.tool(toolsmod.qrencode_path()),
         "port": DEFAULT_PORT,
         "pair_seconds": pair_window(),

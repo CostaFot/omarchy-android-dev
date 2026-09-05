@@ -5,7 +5,7 @@ import Quickshell.Io
 // The data side of the plugin: runs bin/omarchy-android-dev, one process at
 // a time, and holds what the last documents said (adb, devices, the
 // selected serial, packages, toggles, the APK folder, the tools, the
-// wireless page and its recent addresses, the status page). Nothing here draws
+// wireless page, the status page). Nothing here draws
 // and nothing here runs adb: the helper does every adb call with a serial,
 // a deadline and a byte cap, and formats every string. This object parses
 // one JSON line per run and keeps it.
@@ -84,10 +84,8 @@ QtObject {
   property var apkList: null
   property var toolsInfo: null
   // The last `wireless` document (mDNS yes or no, the services on the
-  // network, the Wi-Fi and plugged devices) and the addresses `connect`
-  // took, newest first (10 kept by the helper).
+  // network, the Wi-Fi and plugged devices).
   property var wirelessInfo: null
-  property var recentAddresses: []
   property string lastError: ""
   property string lastErrorCode: ""
   // True once any document has landed (the first `status` after load).
@@ -304,7 +302,6 @@ QtObject {
     if (d.command === "apk" && Array.isArray(d.apks)) apkList = d
     if (d.command === "tools" && Array.isArray(d.avds)) toolsInfo = d
     if (d.command === "wireless" && d.mdns && typeof d.mdns === "object") wirelessInfo = d
-    if (Array.isArray(d.recent_addresses)) recentAddresses = d.recent_addresses
     if (Array.isArray(d.recent_deeplinks)) recentDeeplinks = d.recent_deeplinks
     if (d.last_package !== undefined) lastPackage = d.last_package ? String(d.last_package) : ""
     if (d.command === "package" && d.ok !== false && d.name) {

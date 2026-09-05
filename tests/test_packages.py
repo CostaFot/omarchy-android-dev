@@ -6,6 +6,7 @@ import unittest
 import _paths  # noqa: F401
 from _paths import FAKE_ADB, SERIAL, FakeAdbCase, fixture
 
+from androiddev import fmt
 from androiddev import packages as pkgmod
 from androiddev.adb import Adb
 from androiddev.cli import Settings
@@ -74,6 +75,12 @@ class Parsing(unittest.TestCase):
         self.assertEqual([p["name"] for p in ordered], ["a.fg", "b.running", "c.debug", "a.other", "d.other"])
         self.assertEqual([pkgmod.section_of(p) for p in ordered], ["Foreground", "Running", "Debuggable", "Other", "Other"])
 
+    def test_package_tags(self):
+        self.assertEqual(fmt.package_tags(True, True, True), "foreground · debuggable")
+        self.assertEqual(fmt.package_tags(True, False, None), "running")
+        self.assertEqual(fmt.package_tags(False, False, True), "debuggable")
+        self.assertEqual(fmt.package_tags(False, False, None), "")
+
     def test_valid_package_names(self):
         self.assertTrue(pkgmod.valid_package("com.android.chrome"))
         self.assertTrue(pkgmod.valid_package("a_b.c1"))
@@ -98,7 +105,9 @@ class Listing(FakeAdbCase):
         doc = pkgmod.list_packages(adb, SERIAL, State(), Settings())
         self.assertEqual([p["name"] for p in doc["packages"]], [TEMPLATE, "com.example.debuggable", "org.example.other"])
         self.assertEqual(doc["packages"][0]["section"], "Running")
+        self.assertEqual(doc["packages"][0]["detail"], "running")
         self.assertIsNone(doc["packages"][1]["debuggable"])  # unknown until the package is opened
+        self.assertEqual(doc["packages"][1]["detail"], "")
         calls = self.joined_calls()
         self.assertIn(f"-s {SERIAL} shell pm list packages -3", calls)
         self.assertIn(f"-s {SERIAL} shell ps -A", calls)
@@ -123,6 +132,7 @@ class Listing(FakeAdbCase):
         by_name = {p["name"]: p for p in doc["packages"]}
         self.assertTrue(by_name["com.example.debuggable"]["debuggable"])
         self.assertEqual(by_name["com.example.debuggable"]["section"], "Debuggable")
+        self.assertEqual(by_name["com.example.debuggable"]["detail"], "debuggable")
 
 
 if __name__ == "__main__":

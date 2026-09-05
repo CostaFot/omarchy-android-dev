@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- The first pages: **Devices** (the picker: every attached device with its state, Enter selects), **Apps** (the package list with a filter box, the Foreground, Running, Debuggable and Other sections, the last package used on that device on top, `r` lists again), the **actions** page for a package (the version and launcher activity, then Launch, Restart, Kill process, Clear app data, Clear data and restart, Force stop, Open deep link, Uninstall behind a confirm dialog, Grant and Revoke all permissions, each with its adb command as the second line) and **Deep link** (a URL box, the recent links, optionally scoped to one package). The hub's device row opens the picker; the Apps and Deep link rows are live.
+- Every action runs through the service, so the result is both the notice row in the panel and a notification with the device's label. An error is an urgent notice and a notification too.
+- IPC: `launch PKG`, `forcestop PKG`, `clear PKG`, `deeplink URL`; `page` accepts `hub devices packages deeplink`.
+- Helper: `packages[].detail` (`foreground · debuggable`, `running`, …, the Windows subtitle), `status` carries `last_package` for the selected device and `recent_deeplinks`, so the panel can show both before anything runs.
+- Boolean settings set as words (`omarchy bar set costafot.android-dev showSystemApps false` without `--json` stores `"false"`) are read as booleans by the helper and the store; before, the word was truthy and system apps stayed listed.
+- 90 offline tests.
+
 ## 0.2.0
 
 - First QML: the plugin is in the bar. `Service.qml` (loaded once per shell while the plugin is enabled) owns the Store, the device tracker and the IPC target; `BarWidget.qml` shows the droid glyph with the device count, dimmed with no device, red while the selected one waits for authorisation, and opens the hub; `Panel.qml` is the hub: the selected device with its state, the pages to come as muted rows, `j`/`k`, Enter, `r`, Escape.

@@ -42,8 +42,20 @@ QtObject {
     return JSON.stringify(out)
   }
 
-  readonly property bool notifyEnabled: setting("notify", true) !== false
-  readonly property bool deviceNotifications: setting("deviceNotifications", true) !== false
+  // A boolean setting. `omarchy bar set ID KEY false` without --json
+  // stores the string "false", so the words count as well as the JSON
+  // booleans; anything unreadable is the fallback.
+  function flag(key, fallback) {
+    var v = setting(key, fallback)
+    if (v === true || v === false) return v
+    var t = String(v).trim().toLowerCase()
+    if (t === "true" || t === "1" || t === "yes" || t === "on") return true
+    if (t === "false" || t === "0" || t === "no" || t === "off" || t === "") return false
+    return fallback
+  }
+
+  readonly property bool notifyEnabled: flag("notify", true)
+  readonly property bool deviceNotifications: flag("deviceNotifications", true)
 
   // ---- What the helper said ----------------------------------------------
   // Each section is replaced by the newest document that carries it and
@@ -54,6 +66,13 @@ QtObject {
   property string selected: ""
   property var packages: []
   property var packagesInfo: null
+  // name → the last `package PKG` document (version, launcher activity,
+  // runtime permissions), filled when the actions page for it opens.
+  property var packageDetails: ({})
+  // Per selected device, the package last acted on; and the deep links
+  // fired from this machine, newest first (10 kept by the helper).
+  property string lastPackage: ""
+  property var recentDeeplinks: []
   property var toggles: null
   property string lastError: ""
   property string lastErrorCode: ""
@@ -96,6 +115,12 @@ QtObject {
   function refreshDevices() { run(["devices"], null) }
   function selectDevice(serial) { run(["select", String(serial)], null) }
   function screenshot() { run(["screenshot"], null) }
+  function refreshPackages() { run(["packages"], null) }
+  function fetchPackage(pkg) { run(["package", String(pkg)], null) }
+
+  // The command of the run in flight ("" between runs), so a page can say
+  // "Listing packages…" for its own run and not for someone else's.
+  readonly property string runningCommand: currentRun && currentRun.args ? String(currentRun.args[0]) : ""
 
   // A frame from the service's tracker (`track`): the device list and the
   // selection it resolved, replacing ours. Not a helper run, so no queue.
@@ -243,6 +268,18 @@ QtObject {
                        system_apps: d.system_apps === true, last_package: d.last_package || "" }
     }
     if (d.toggles && typeof d.toggles === "object") toggles = d.toggles
+    if (Array.isArray(d.recent_deeplinks)) recentDeeplinks = d.recent_deeplinks
+    if (d.last_package !== undefined) lastPackage = d.last_package ? String(d.last_package) : ""
+    if (d.command === "package" && d.ok !== false && d.name) {
+      var details = Object.assign({}, packageDetails)
+      details[String(d.name)] = d
+      packageDetails = details
+    }
+    if (d.command === "app" && d.action === "uninstall" && d.ok !== false && d.package) {
+      // Gone from the device; drop it here too until the next list.
+      packages = packages.filter(function(p) { return p.name !== d.package })
+      if (lastPackage === d.package) lastPackage = ""
+    }
     loaded = true
     if (d.error && d.error.message) {
       fail(String(d.error.code || "internal"), String(d.error.message))

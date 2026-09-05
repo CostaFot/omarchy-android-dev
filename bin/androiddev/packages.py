@@ -185,6 +185,7 @@ def list_packages(adb, serial, state, settings):
     packages = sort_packages(packages)
     for p in packages:
         p["section"] = section_of(p)
+        p["detail"] = fmt.package_tags(p["running"], p["foreground"], p["debuggable"])
     if state:
         state.write_package_cache(serial, {p["name"]: {"debuggable": p["debuggable"]} for p in packages})
     return {"packages": packages, "foreground": foreground, "count": len(packages), "system_apps": bool(settings.get("showSystemApps", False))}

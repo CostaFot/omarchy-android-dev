@@ -65,6 +65,19 @@ def on_off(on):
     return "on" if on else "off"
 
 
+def package_tags(running, foreground, debuggable):
+    """The second line of a package row, as on Windows: `foreground` or
+    `running`, then `debuggable`; empty when the package is neither."""
+    tags = []
+    if foreground:
+        tags.append("foreground")
+    elif running:
+        tags.append("running")
+    if debuggable:
+        tags.append("debuggable")
+    return " · ".join(tags)
+
+
 def humanize_model(model):
     return clean(model).replace("_", " ").strip()
 

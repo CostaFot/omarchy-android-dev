@@ -6,6 +6,14 @@ Started as a port of the Windows [ADB Extension for Command Palette](https://git
 
 **Work in progress.** In the bar: a droid glyph that lights up with a device and dims without one, a notification when a device connects or disconnects, and a hub that shows the selected device. The pages hang off it one release at a time; the part that talks to `adb` is complete and works from a terminal.
 
+## In the panel
+
+- **Devices**: every attached device with its state; Enter selects the one the other pages talk to. With one device there is nothing to pick.
+- **Apps**: the packages on the device, third-party by default (turn on *Show system apps* to see them all), with a filter box, the running and foreground ones on top and the package you last touched above them. Enter opens a package: its version and launcher activity, then Launch, Restart, Kill process, Clear app data, Clear data and restart, Force stop, Open deep link, Uninstall (asks first), Grant all permissions, Revoke all permissions. Each row names the adb command it runs.
+- **Deep link**: type a URL or a deep link and press Enter; the recent ones are listed below and can be fired again. From a package's actions page the link is scoped to that package.
+
+Every action shows its result in the panel and sends a notification with the device's name. `j`/`k` or the arrows move, Enter runs, Escape or Backspace goes back, `r` reads again.
+
 ## Requirements
 
 `adb`, from the `android-tools` package or the SDK platform-tools. It does not need to be on `PATH`: the plugin looks in `$ANDROID_HOME`, `$ANDROID_SDK_ROOT` and `~/Android/Sdk` too, and a settings key can point at it.
@@ -26,6 +34,9 @@ omarchy-shell costafot.android-dev toggle        # the hub
 omarchy-shell costafot.android-dev status | jq   # adb, devices, the tracker
 omarchy-shell costafot.android-dev screenshot    # saved, on the clipboard, with a notification
 omarchy-shell costafot.android-dev select emulator-5554
+omarchy-shell costafot.android-dev page packages # open the panel on a page: hub, devices, packages, deeplink
+omarchy-shell costafot.android-dev launch com.android.chrome   # forcestop and clear take a package too
+omarchy-shell costafot.android-dev deeplink https://example.com
 ```
 
 Bind any of them to a key in Hyprland the way you would any command.
@@ -37,7 +48,7 @@ Every command answers with one line of JSON. Errors ride inside it; the exit cod
 ```bash
 bin/omarchy-android-dev status | jq '{adb, selected, tools}'
 bin/omarchy-android-dev devices | jq '.devices[] | [.serial, .state, .label]'
-bin/omarchy-android-dev packages | jq '.packages[] | [.name, .section]'
+bin/omarchy-android-dev packages | jq '.packages[] | [.name, .section, .detail]'
 bin/omarchy-android-dev package com.android.chrome | jq '{launcher_activity, runtime_permissions}'
 bin/omarchy-android-dev app launch com.android.chrome | jq .notice       # restart, force-stop, kill, clear, clear-restart, uninstall
 bin/omarchy-android-dev perms grant com.android.chrome | jq .notice      # or revoke

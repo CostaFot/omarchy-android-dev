@@ -225,6 +225,29 @@ Item {
     if (store.proc.running) store.proc.signal(15)
   }
 
+  // ---- Actions ---------------------------------------------------------------
+  // One path for the panel and the IPC verbs: run the helper, then tell the
+  // user how it went. The panel shows the store's notice on its own; the
+  // notification is for the terminal and for the panel being closed. The
+  // helper's own notification (screenshots) is not doubled.
+  function act(args, onDone) {
+    store.run(args, function(doc) {
+      if (args[0] !== "screenshot" && store.notifyEnabled) {
+        var dev = store.selectedDevice
+        if (doc && doc.ok !== false && doc.notice) notify(String(doc.notice), dev ? dev.label : "")
+        else if (store.lastError !== "") notify(store.lastError, dev ? dev.label : "")
+      }
+      if (typeof onDone === "function") onDone(doc)
+    })
+    return "requested"
+  }
+
+  // A package name as the IPC verbs accept it; the helper checks again.
+  function validPackage(pkg) {
+    var p = String(pkg || "").trim()
+    return p !== "" && p.length <= 256 && /^[A-Za-z0-9_.]+$/.test(p) ? p : ""
+  }
+
   // ---- Panel routing ---------------------------------------------------------
   // The shell's summon/hide pick the widget on the focused monitor; with
   // no bar widget placed there is nothing to open.
@@ -281,10 +304,14 @@ Item {
     "omarchy-shell costafot.android-dev <verb> [args]",
     "  help                 this list",
     "  open | close | toggle  the panel (show/hide are aliases)",
-    "  page NAME            open the panel on a page (hub)",
+    "  page NAME            open the panel on a page: hub devices packages deeplink",
     "  status               one JSON line: adb, devices, tracker, errors",
     "  devices              one JSON line: the attached devices",
     "  select SERIAL        make SERIAL the selected device",
+    "  launch PKG           start PKG's launcher activity on the selected device",
+    "  forcestop PKG        am force-stop PKG",
+    "  clear PKG            pm clear PKG",
+    "  deeplink URL         am start -a VIEW -d URL",
     "  screenshot           screenshot of the selected device: file, clipboard, notification",
     "  refresh              re-read adb and the device list",
     "Action verbs return at once; the result arrives as a notification and in the panel."
@@ -313,6 +340,23 @@ Item {
       if (s === "" || !/^[A-Za-z0-9._:\-]+$/.test(s)) return "select needs a device serial"
       root.store.selectDevice(s)
       return "requested"
+    }
+    function launch(pkg: string): string {
+      var p = root.validPackage(pkg)
+      return p === "" ? "launch needs a package name" : root.act(["app", "launch", p])
+    }
+    function forcestop(pkg: string): string {
+      var p = root.validPackage(pkg)
+      return p === "" ? "forcestop needs a package name" : root.act(["app", "force-stop", p])
+    }
+    function clear(pkg: string): string {
+      var p = root.validPackage(pkg)
+      return p === "" ? "clear needs a package name" : root.act(["app", "clear", p])
+    }
+    function deeplink(url: string): string {
+      var u = String(url || "").trim()
+      if (u === "" || u.length > 2048 || /[\s\x00-\x1f\x7f]/.test(u)) return "deeplink needs a URL with a scheme, such as https://example.com"
+      return root.act(["deeplink", u])
     }
     function screenshot(): string { root.store.screenshot(); return "requested" }
     function refresh(): string { root.store.refreshStatus(); return "requested" }

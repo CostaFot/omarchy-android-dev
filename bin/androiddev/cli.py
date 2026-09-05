@@ -38,7 +38,7 @@ SETTING_DEFAULTS = {
 }
 
 HELP = [
-    ("status", "adb path and source, devices, selected device, tools, versions"),
+    ("status", "adb path and source, devices, selected device, last package, recent deep links, tools, versions"),
     ("devices", "attached devices with labels; the selected one marked"),
     ("select SERIAL", "remember SERIAL as the selected device"),
     ("track", "stream one JSON line per device change (adb track-devices)"),
@@ -63,6 +63,30 @@ class Deadline(BaseException):
     Exception` on the way up can swallow it."""
 
 
+_TRUE_WORDS = ("true", "1", "yes", "on")
+_FALSE_WORDS = ("false", "0", "no", "off", "")
+
+
+def coerce_setting(default, value):
+    """A setting takes the type of its default. `omarchy bar set ID KEY false`
+    without --json stores the string "false", so a boolean accepts the
+    words as well as a JSON boolean; anything else keeps the default."""
+    if isinstance(default, bool):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        word = str(value).strip().lower()
+        if word in _TRUE_WORDS:
+            return True
+        if word in _FALSE_WORDS:
+            return False
+        return default
+    if isinstance(value, (str, int, float)):
+        return str(value)
+    return default
+
+
 class Settings:
     """Whitelisted scalars from the plugin's shell.json entry, passed by the
     store as `--settings '<json>'`; unknown keys are ignored."""
@@ -71,7 +95,7 @@ class Settings:
         self.values = dict(SETTING_DEFAULTS)
         for key, value in (overrides or {}).items():
             if key in SETTING_DEFAULTS and value is not None:
-                self.values[key] = value
+                self.values[key] = coerce_setting(SETTING_DEFAULTS[key], value)
 
     def get(self, key, fallback=None):
         return self.values.get(key, fallback)
@@ -220,12 +244,16 @@ def cmd_status(ctx, args):
         },
         "devices": [],
         "selected": None,
+        "last_package": None,
+        "recent_deeplinks": ctx.state.recent_deeplinks,
     }
     try:
         ctx.require_adb()
         payload["adb_version"] = adb.version()
         payload["devices"] = ctx.devices()
         payload["selected"] = ctx.selected()
+        if payload["selected"]:
+            payload["last_package"] = ctx.state.last_package(payload["selected"])
     except AdbError as e:
         raise PartialError(payload, e) from e
     return payload

@@ -29,6 +29,23 @@ class Cli(FakeAdbCase):
         self.assertEqual(doc["error"]["code"], "bad_args")
         self.assertIn("screenshot", doc["error"]["message"])
 
+    def test_settings_take_the_type_of_their_default(self):
+        from androiddev.cli import Settings
+        # `omarchy bar set … false` without --json stores the word, not the boolean.
+        self.assertIs(Settings({"showSystemApps": "false"}).get("showSystemApps"), False)
+        self.assertIs(Settings({"showSystemApps": "true"}).get("showSystemApps"), True)
+        self.assertIs(Settings({"notify": "0"}).get("notify"), False)
+        self.assertIs(Settings({"notify": "maybe"}).get("notify"), True)
+        self.assertIs(Settings({"confirmUninstall": 0}).get("confirmUninstall"), False)
+        self.assertEqual(Settings({"adbPath": 5}).get("adbPath"), "5")
+        self.assertEqual(Settings({"apkDir": ["x"]}).get("apkDir"), "~/Downloads")
+        self.assertEqual(Settings({"unknown": True}).values, Settings().values)
+        self.add_rules({"match": "pm list", "stdout": "package:com.foo\n"})
+        doc = self.run_cli("--settings", '{"showSystemApps": "false"}', "packages")
+        self.assertTrue(doc["ok"])
+        self.assertFalse(doc["system_apps"])
+        self.assertTrue(any("-3" in call for call in self.calls() if "pm" in call))
+
     def test_bad_settings_json_and_bad_serial_are_bad_args(self):
         self.assertEqual(self.run_cli("--settings", "{nope", "status")["error"]["code"], "bad_args")
         self.assertEqual(self.run_cli("--serial", "bad serial", "devices")["error"]["code"], "bad_args")
@@ -105,6 +122,16 @@ class Cli(FakeAdbCase):
         doc = self.run_cli("deeplink", "https://example.com")
         self.assertEqual(doc["notice"], "Launched: https://example.com")
         self.assertEqual(doc["recent_deeplinks"], ["https://example.com"])
+        # The panel lists the recent links and the last package from `status`
+        # before any deep link is fired in this shell.
+        self.add_rules({"match": "shell am start", "stdout": ""})
+        self.assertEqual(self.run_cli("deeplink", "myapp://home", "com.foo")["recent_deeplinks"], ["myapp://home", "https://example.com"])
+        status = self.run_cli("status")
+        self.assertEqual(status["recent_deeplinks"], ["myapp://home", "https://example.com"])
+        self.assertIsNone(status["last_package"])
+        self.add_rules({"match": "resolve-activity", "stdout": "com.foo/.Main\n"})
+        self.run_cli("app", "launch", "com.foo")
+        self.assertEqual(self.run_cli("status")["last_package"], "com.foo")
 
     def test_too_much_output_rides_in_the_envelope(self):
         self.add_rules({"match": "shell pm list packages", "bytes": 10 * 1024 * 1024, "sleep_after": 20})

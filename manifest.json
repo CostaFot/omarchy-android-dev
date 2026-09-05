@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "id": "costafot.android-dev",
+  "name": "Android Dev",
+  "version": "0.1.0",
+  "author": "CostaFot",
+  "license": "MIT",
+  "description": "The Android developer's side of a device, on the bar: adb devices, packages and their actions, developer toggles, screenshots, deep links, APKs, the emulator, scrcpy and logcat.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Android Dev",
+    "description": "adb for the Android developer: devices, packages, toggles, screenshots. Click for the panel.",
+    "category": "Development",
+    "aliases": [
+      "adb",
+      "android",
+      "emulator"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "adbPath": "",
+      "screenshotDir": "",
+      "apkDir": "~/Downloads",
+      "scrcpyArgs": "",
+      "notify": true,
+      "deviceNotifications": true,
+      "confirmUninstall": true,
+      "showSystemApps": false
+    },
+    "schema": [
+      {
+        "key": "adbPath",
+        "type": "path",
+        "label": "adb binary",
+        "description": "Empty auto-detects: $ANDROID_HOME or $ANDROID_SDK_ROOT, then ~/Android/Sdk/platform-tools, then PATH.",
+        "defaultValue": ""
+      },
+      {
+        "key": "screenshotDir",
+        "type": "path",
+        "label": "Screenshot folder",
+        "description": "Empty uses Omarchy's screenshot folder (OMARCHY_SCREENSHOT_DIR, else your Pictures folder).",
+        "defaultValue": ""
+      },
+      {
+        "key": "apkDir",
+        "type": "path",
+        "label": "APK folder",
+        "description": "Where the APK manager looks for .apk files.",
+        "defaultValue": "~/Downloads"
+      },
+      {
+        "key": "scrcpyArgs",
+        "type": "string",
+        "label": "Extra scrcpy arguments",
+        "description": "Appended to the scrcpy command line, split on whitespace.",
+        "defaultValue": ""
+      },
+      {
+        "key": "notify",
+        "type": "boolean",
+        "label": "Notifications",
+        "description": "Desktop notifications for actions and captures.",
+        "defaultValue": true
+      },
+      {
+        "key": "deviceNotifications",
+        "type": "boolean",
+        "label": "Device notifications",
+        "description": "Notify when a device connects or disconnects.",
+        "defaultValue": true
+      },
+      {
+        "key": "confirmUninstall",
+        "type": "boolean",
+        "label": "Confirm uninstall",
+        "description": "Ask before uninstalling an app.",
+        "defaultValue": true
+      },
+      {
+        "key": "showSystemApps",
+        "type": "boolean",
+        "label": "Show system apps",
+        "description": "List every package, not only third-party ones.",
+        "defaultValue": false
+      }
+    ]
+  }
+}

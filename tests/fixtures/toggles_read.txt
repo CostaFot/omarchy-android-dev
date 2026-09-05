@@ -1,0 +1,11 @@
+api=37
+layout=
+global:window_animation_scale=1.0
+global:transition_animation_scale=1.0
+global:animator_duration_scale=null
+system:show_touches=null
+system:pointer_location=null
+global:airplane_mode_on=0
+global:wifi_on=1
+global:mobile_data=1
+global:bluetooth_on=1

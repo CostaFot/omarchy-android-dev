@@ -1,0 +1,17 @@
+USER           PID  PPID        VSZ    RSS WCHAN            ADDR S NAME                       
+root             1     0   10862516   3360 0                   0 S init
+root             2     0          0      0 0                   0 S [kthreadd]
+root             3     2          0      0 0                   0 S [pool_workqueue_release]
+u0_a190       1117   457   16943380  75664 0                   0 S com.android.systemui
+u0_a206       1118   457   16562644  30536 0                   0 S com.google.android.permissioncontroller
+u0_a193       1413   457   16754276  56680 0                   0 S com.google.android.apps.nexuslauncher
+u0_a150       1811   457   17938932  49856 0                   0 S com.google.android.googlequicksearchbox:interactor
+u0_a149       1814   457   16960596  53648 0                   0 S com.google.android.as
+u0_a210       1817   457   16848740  36196 0                   0 S com.google.android.providers.media.module
+u0_a146       2300   457   16622324  32080 0                   0 S com.google.android.as.oss
+u0_a226       3252   457   16534516  26176 0                   0 S com.google.android.adservices.api
+u0_a201       5911   457   16527636  25972 0                   0 S com.google.android.ext.services
+u0_a229       7138   457   16661476  59036 0                   0 S com.costafotiadis.androidtemplate.compose.debug
+u0_a145       7403   457   16728676  45852 0                   0 S com.android.vending:background
+u0_a145       7711   457   16719908  36860 0                   0 S com.android.vending:quick_launch
+u0_a999       4321   457   16935684  78272 0                   0 S com.costafotiadis.androidtemplate.compose.debug

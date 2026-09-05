@@ -1,0 +1,3 @@
+package:com.costafotiadis.androidtemplate.compose.debug
+package:com.example.debuggable
+package:org.example.other

@@ -1,0 +1,16 @@
+  mSleeping=false mAllSleepTokens=[]
+  mLayoutSeq=242
+  mImeWindow=Window{28d2eb8 u0 InputMethod}
+  mImeLayeringTarget=Window{2f953d5 u0 com.android.chrome/com.google.android.apps.chrome.Main}
+  mImeInputTarget=Window{2f953d5 u0 com.android.chrome/com.google.android.apps.chrome.Main}
+  mImeControlTarget=Window{2f953d5 u0 com.android.chrome/com.google.android.apps.chrome.Main}
+  ImeContainer
+    mNeedsLayer=false
+    mImeWindowToken=null
+  mImeParent=ActivityRecord{28292757 u0 com.android.chrome/com.google.android.apps.chrome.Main t12}
+  mRemoteInsetsControlTarget=RemoteInsetsControlTarget{4fe8167 displayId=0 requestedVisibleTypes=503 animatingTypes=0}
+  mCurrentFocus=Window{2f953d5 u0 com.android.chrome/com.google.android.apps.chrome.Main}
+  mFocusedApp=ActivityRecord{28292757 u0 com.android.chrome/com.google.android.apps.chrome.Main t12}
+  mFixedRotationLaunchingApp=null
+
+  mHoldScreenWindow=null

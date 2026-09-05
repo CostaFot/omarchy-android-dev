@@ -141,7 +141,7 @@ Item {
     } else if (ev.event === "error" && ev.error) {
       trackerErrorCode = String(ev.error.code || "internal")
       trackerError = String(ev.error.message || "The device tracker stopped")
-      if (trackerErrorCode === "no_adb") store.adbInfo = { path: null, source: null }
+      if (trackerErrorCode === "no_adb") store.adbInfo = { path: null, source: null, text: null }
     }
   }
 
@@ -409,13 +409,24 @@ Item {
     return "opened"
   }
 
+  // The page the open panel shows (the first host's when none is open).
+  readonly property string panelPage: {
+    var target = null
+    for (var i = 0; i < hosts.length; i++) if (hosts[i].opened === true) { target = hosts[i]; break }
+    if (!target) target = host
+    return target && target.page !== undefined ? String(target.page) : ""
+  }
+
   function statusJson() {
     var s = store
     var dev = s.selectedDevice
+    var settings = {}
+    try { settings = JSON.parse(s.settingsJson) } catch (e) { settings = {} }
     return JSON.stringify({
       version: version,
       plugin_dir: pluginDir,
       adb: s.adbInfo,
+      settings: settings,
       devices: s.devices.length,
       selected: s.selected,
       selected_label: dev ? dev.label : "",
@@ -425,7 +436,8 @@ Item {
       error: s.lastError,
       recording: { active: recording, stopping: recordingStopping, seconds: recordingSeconds, device_path: recordingDevicePath },
       hosts: hosts.length,
-      opened: opened
+      opened: opened,
+      page: opened ? panelPage : ""
     })
   }
 
@@ -433,8 +445,8 @@ Item {
     "omarchy-shell costafot.android-dev <verb> [args]",
     "  help                 this list",
     "  open | close | toggle  the panel (show/hide are aliases)",
-    "  page NAME            open the panel on a page: hub devices packages deeplink toggles capture apks text tools",
-    "  status               one JSON line: adb, devices, tracker, errors",
+    "  page NAME            open the panel on a page: hub devices packages deeplink toggles capture apks text tools settings",
+    "  status               one JSON line: adb, settings, devices, tracker, recording, the open page, errors",
     "  devices              one JSON line: the attached devices",
     "  select SERIAL        make SERIAL the selected device",
     "  launch PKG           start PKG's launcher activity on the selected device",
@@ -450,7 +462,9 @@ Item {
     "  avd NAME             start that emulator (refused while it runs)",
     "  logcat [PKG]         adb logcat in a terminal, following PKG's process when given",
     "  refresh              re-read adb and the device list",
-    "Action verbs return at once; the result arrives as a notification and in the panel."
+    "Action verbs return at once; the result arrives as a notification and in the panel.",
+    "Settings: the panel's Settings page, or `omarchy bar set costafot.android-dev KEY VALUE` (adbPath screenshotDir",
+    "recordingDir apkDir scrcpyArgs notify deviceNotifications confirmUninstall showSystemApps); both apply at once."
   ]
 
   //   omarchy-shell costafot.android-dev help

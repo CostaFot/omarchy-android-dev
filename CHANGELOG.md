@@ -1,8 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
-- scrcpy is launched with `ADB` set to the adb the plugin resolved (the SDK's platform-tools by default), so it talks to the same binary and server as everything else. The `scrcpy` package pulls in `android-tools` and its own `/usr/bin/adb`, which scrcpy would otherwise pick off PATH; a client of another protocol version restarts the adb server under the device tracker. Checked live: the Mirror row appeared on the Tools page without a restart once scrcpy was installed, the window opened in its own scope, and its adb child was the SDK one. 127 offline tests.
+- **Settings**: the last hub row is a page. A form with the adb binary, the screenshot, recording and APK folders and the extra scrcpy arguments as text fields, and Notifications, Device notifications, Confirm uninstall and Show system apps as toggles; `j`/`k`, Tab and the arrows walk it, Enter edits a field or flips a toggle, Enter on Save writes the keys that changed in one atomic shell.json update and the running plugin takes them at once (the tracker restarts with the new adb path, the next helper run carries the new folders), no shell restart. The hub's Settings row names the adb in use and how it was found (`~/Android/Sdk/platform-tools/adb · found in ~/Android/Sdk`). `page settings` over IPC opens it.
+- An `adbPath` setting that names no adb is now reported (`No adb at ~/x. Fix the adbPath setting, or clear it to look in the SDK and on PATH again`) on the hub, the Devices page and every device page, instead of being silently replaced by the SDK's or PATH's adb. Clearing the setting brings auto-detection back, live.
+- IPC: `status` adds the settings in force, the page the open panel shows and the recording state; `help` lists every verb, the settings keys and the `omarchy bar set` form.
+- scrcpy is launched with `ADB` set to the adb the plugin resolved (the SDK's platform-tools by default), so it talks to the same binary and server as everything else. The `scrcpy` package pulls in `android-tools` and its own `/usr/bin/adb`, which scrcpy would otherwise pick off PATH; a client of another protocol version restarts the adb server under the device tracker. Checked live: the Mirror row appeared on the Tools page without a restart once scrcpy was installed, the window opened in its own scope, and its adb child was the SDK one.
+- README: Hyprland keybindings (`o.bind` lines for the panel and a screenshot), an `omarchy-menu` extension row, the settings table.
+- Helper: `adb.path_text`, `adb.source_text` and `adb.text` in every envelope. Tests: `tests/test_manifest.py` pins the manifest's defaults and schema to the helper's, the store's key list, the Settings page's defaults and form, and the IPC help's page list. 134 offline tests.
 
 ## 0.5.0
 

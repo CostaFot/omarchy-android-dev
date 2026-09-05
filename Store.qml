@@ -62,7 +62,10 @@ QtObject {
   // ---- What the helper said ----------------------------------------------
   // Each section is replaced by the newest document that carries it and
   // never blanked by a failure: an error sets `lastError`, the lists stay.
-  property var adbInfo: ({ path: null, source: null })
+  // The envelope's `adb`: path and source, plus the helper's display line
+  // (`~/Android/Sdk/platform-tools/adb · found in ~/Android/Sdk`) for the
+  // hub's Settings row.
+  property var adbInfo: ({ path: null, source: null, text: null })
   property var status: null
   property var devices: []
   property string selected: ""
@@ -88,6 +91,7 @@ QtObject {
   readonly property bool hasAdb: adbInfo && adbInfo.path ? true : false
   readonly property string adbPath: adbInfo && adbInfo.path ? String(adbInfo.path) : ""
   readonly property string adbSource: adbInfo && adbInfo.source ? String(adbInfo.source) : ""
+  readonly property string adbText: adbInfo && adbInfo.text ? String(adbInfo.text) : ""
   readonly property int deviceCount: devices.length
   readonly property var selectedDevice: {
     for (var i = 0; i < devices.length; i++) if (devices[i].serial === selected) return devices[i]
@@ -267,7 +271,7 @@ QtObject {
       fail("internal", "The Android Dev helper returned an unexpected document (not schema_version 1)")
       return null
     }
-    if (d.adb && typeof d.adb === "object") adbInfo = { path: d.adb.path || null, source: d.adb.source || null }
+    if (d.adb && typeof d.adb === "object") adbInfo = { path: d.adb.path || null, source: d.adb.source || null, text: d.adb.text || null }
     if (d.command === "status") status = d
     if (Array.isArray(d.devices)) {
       devices = d.devices

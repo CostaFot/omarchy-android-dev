@@ -32,7 +32,14 @@ class Resolution(FakeAdbCase):
         self.assertEqual(adbmod.resolve(Settings({"adbPath": fake})), (fake, "setting"))
         self.assertEqual(adbmod.resolve(Settings({"adbPath": sdk})), (fake, "setting"))  # a directory works too
         os.environ["ANDROID_HOME"] = os.path.join(self.tmp.name, "sdk")
-        self.assertEqual(adbmod.resolve(Settings({"adbPath": "/nonexistent"})), (fake, "env"))
+        self.assertEqual(adbmod.resolve(Settings()), (fake, "env"))
+        # A setting that names no adb is an error, not a hint: nothing falls through to the SDK.
+        self.assertEqual(adbmod.resolve(Settings({"adbPath": "/nonexistent"})), (None, None))
+        self.assertEqual(adbmod.missing_text(Settings({"adbPath": "/nonexistent"})),
+                         "No adb at /nonexistent. Fix the adbPath setting, or clear it to look in the SDK and on PATH again")
+        self.assertEqual(adbmod.missing_text(Settings({"adbPath": sdk + "/missing"})),
+                         "No adb at " + fmt.display_path(sdk + "/missing") + ". Fix the adbPath setting, or clear it to look in the SDK and on PATH again")
+        self.assertTrue(adbmod.missing_text(Settings()).startswith("No adb found."))
         os.environ.pop("ANDROID_HOME")
         saved_path = os.environ.get("PATH", "")
         os.environ["PATH"] = sdk + os.pathsep + saved_path
@@ -42,6 +49,15 @@ class Resolution(FakeAdbCase):
             os.environ["PATH"] = saved_path
         self.assertIn(source, ("home", "path"))  # "home" on a machine with ~/Android/Sdk
         self.assertEqual(adbmod.sdk_root(fake), os.path.join(self.tmp.name, "sdk"))
+
+
+    def test_describe_carries_a_display_line(self):
+        d = Adb(os.path.expanduser("~/Android/Sdk/platform-tools/adb"), "home", None).describe()
+        self.assertEqual(d["path_text"], "~/Android/Sdk/platform-tools/adb")
+        self.assertEqual(d["source_text"], "found in ~/Android/Sdk")
+        self.assertEqual(d["text"], "~/Android/Sdk/platform-tools/adb · found in ~/Android/Sdk")
+        self.assertEqual(Adb("/usr/bin/adb", "path", None).describe()["text"], "/usr/bin/adb · found on PATH")
+        self.assertEqual(Adb("/opt/adb", "setting", None).describe()["source_text"], "from the adbPath setting")
 
 
 class Runner(FakeAdbCase):

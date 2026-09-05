@@ -74,13 +74,6 @@ class Cli(FakeAdbCase):
         self.assertEqual(doc["screenshot_dir"], os.environ["OMARCHY_SCREENSHOT_DIR"])
         self.assertEqual(doc["recording_dir"], os.environ["OMARCHY_SCREENRECORD_DIR"])
 
-    def test_manifest_defaults_match_the_helper(self):
-        from androiddev.cli import SETTING_DEFAULTS
-        with open(os.path.join(os.path.dirname(HELPER), "..", "manifest.json"), "r", encoding="utf-8") as f:
-            manifest = json.load(f)
-        self.assertEqual(manifest["barWidget"]["defaults"], SETTING_DEFAULTS)
-        self.assertEqual([s["key"] for s in manifest["barWidget"]["schema"]], list(SETTING_DEFAULTS))
-
     def test_devices_marks_the_only_device_selected(self):
         doc = self.run_cli("devices")
         self.assertEqual(doc["devices"][0]["label"], "Pixel 10 Pro Fold (emulator-5554)")

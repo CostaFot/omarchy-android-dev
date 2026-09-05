@@ -5,17 +5,18 @@ import qs.Ui
 
 // Popup for the Android Dev bar widget: the hub is the selected device with
 // the pages hanging off it (Devices, Apps and a package's actions, Deep
-// link, Toggles, Capture, APKs, Send text, Tools; Settings arrives with
-// its version). Pages live on a stack; Escape and Backspace walk back,
+// link, Toggles, Capture, APKs, Send text, Tools, Settings). Pages live
+// on a stack; Escape and Backspace walk back,
 // Escape on the hub closes. The data is the service's Store
 // (one per shell), reached through `service`; this panel never runs the
 // helper for itself beyond asking the store (or the service, for actions
 // that also notify) to.
 //
 // Page renderers build one flat `rows` array and a Repeater paints it.
-// The filter / URL / folder / text field and the confirm dialog live
-// outside the Repeater: rows are rebuilt on every document. The service owns the
-// plugin's IPC target, so `manageIpc` is off here.
+// The filter / URL / folder / text field, the settings form and the
+// confirm dialog live outside the Repeater: rows are rebuilt on every
+// document. The service owns the plugin's IPC target, so `manageIpc` is
+// off here. This panel is the one writer of the plugin's settings.
 Panel {
   id: root
   moduleName: "costafot.android-dev"
@@ -56,13 +57,15 @@ Panel {
   readonly property string page: current.page
   readonly property bool isHub: stack.length === 1
   readonly property bool hasField: page === "packages" || page === "deeplink" || page === "apks" || page === "text"
+  // The settings form replaces the row list while it shows.
+  readonly property bool isSettingsForm: page === "settings"
 
   readonly property var pageTitles: ({
     hub: "Android Dev", devices: "Devices", packages: "Apps", actions: "", deeplink: "Deep link", toggles: "Toggles",
     capture: "Capture", apks: "APKs", text: "Send text", tools: "Tools", settings: "Settings"
   })
   // Pages the IPC `page` verb may open straight onto.
-  readonly property var ipcPages: ["hub", "devices", "packages", "deeplink", "toggles", "capture", "apks", "text", "tools"]
+  readonly property var ipcPages: ["hub", "devices", "packages", "deeplink", "toggles", "capture", "apks", "text", "tools", "settings"]
 
   function push(entry) {
     var top = Object.assign({}, current, { cursor: selectedIndex, query: filterField.text })
@@ -108,6 +111,7 @@ Panel {
       else if (entry.page === "apks") { resetInstalls(); listApks() }
       else if (entry.page === "tools") store.refreshTools()
     }
+    if (entry.page === "settings") loadPendingSettings()
     Qt.callLater(function() {
       var wanted = entry.cursor
       selectedIndex = (wanted !== undefined && root.isCursorRow(root.rows[wanted])) ? wanted : root.firstCursorIndex()
@@ -139,7 +143,7 @@ Panel {
     else if (page === "apks") body = apkRows()
     else if (page === "text") body = textRows()
     else if (page === "tools") body = toolRows()
-    else body = soonRows()
+    else body = []  // the settings form paints itself
     for (var i = 0; i < body.length; i++) out.push(body[i])
     var s = root.store
     if (s && s.notice !== "") {
@@ -150,8 +154,7 @@ Panel {
     return out
   }
 
-  // The hub's page rows, in the order they arrive. `version` marks a page
-  // that is not here yet.
+  // The hub's page rows.
   readonly property var pageRows: [
     { icon: "\uf00a", label: "Apps", detail: "Packages, their actions and deep links", page: "packages" },
     { icon: "\uf0c1", label: "Deep link", detail: "Open a URL on the device", page: "deeplink" },
@@ -160,7 +163,7 @@ Panel {
     { icon: "\uf1b2", label: "APKs", detail: "Install from a folder", page: "apks" },
     { icon: "\uf11c", label: "Send text", detail: "Type text or the clipboard on the device", page: "text" },
     { icon: "\uf0ad", label: "Tools", detail: "scrcpy, emulators, logcat", page: "tools" },
-    { icon: "\uf013", label: "Settings", detail: "adb path, folders, notifications", page: "settings", version: "0.6.0" }
+    { icon: "\uf013", label: "Settings", detail: "", page: "settings" }
   ]
 
   function hubRows() {
@@ -176,8 +179,7 @@ Panel {
     if (!s.loaded) {
       out.push({ type: "action", icon: glyph, label: "Looking for adb…", detail: "", action: "refresh" })
     } else if (!s.hasAdb) {
-      out.push({ type: "note", urgent: true, icon: "\uf071", label: "adb not found",
-                 detail: "Set the adb path in the plugin settings, or install the android-tools package or the SDK platform-tools." })
+      out.push({ type: "note", urgent: true, icon: "\uf071", label: "adb not found", detail: noAdbDetail() })
       out.push({ type: "action", icon: "\uf021", label: "Look again", detail: "Re-read adb and the devices", action: "refresh" })
     } else if (dev) {
       var detail = dev.detail || ""
@@ -199,10 +201,28 @@ Panel {
     out.push({ type: "sep" })
     for (var i = 0; i < pageRows.length; i++) {
       var c = pageRows[i]
-      if (c.version) out.push({ type: "action", icon: c.icon, label: c.label, detail: c.version + " · " + c.detail, page: c.page, muted: true })
-      else out.push({ type: "action", icon: c.icon, label: c.label, detail: c.detail, page: c.page })
+      out.push({ type: "action", icon: c.icon, label: c.label, detail: c.page === "settings" ? settingsDetail() : c.detail, page: c.page })
     }
     return out
+  }
+
+  // The helper says why there is no adb (`No adb at ~/x. Fix the adbPath
+  // setting…` or `No adb found. Set adbPath…`); the literal is for before
+  // it has spoken.
+  function noAdbDetail() {
+    var s = root.store
+    var svc = root.service
+    if (s && s.lastErrorCode === "no_adb" && s.lastError !== "") return s.lastError
+    if (svc && svc.trackerErrorCode === "no_adb" && svc.trackerError !== "") return svc.trackerError
+    return "Set the adb path on the Settings page, or install the android-tools package or the SDK platform-tools."
+  }
+
+  // The hub's Settings row: which adb is in use, in the helper's words.
+  function settingsDetail() {
+    var s = root.store
+    if (!s || !s.loaded) return "adb path, folders, notifications"
+    if (!s.hasAdb) return "adb not found · set its path here"
+    return s.adbText !== "" ? s.adbText : "adb path, folders, notifications"
   }
 
   // The picker: one row per attached device, the selected one marked.
@@ -210,7 +230,7 @@ Panel {
     var s = root.store
     var out = []
     if (!s.hasAdb) {
-      out.push({ type: "note", urgent: true, label: "adb not found", detail: "Set the adb path in the plugin settings." })
+      out.push({ type: "note", urgent: true, label: "adb not found", detail: noAdbDetail() })
     } else if (s.devices.length === 0) {
       out.push({ type: "note", label: "No device", detail: "Connect a device over USB or start an emulator; it shows up here on its own." })
     }
@@ -231,7 +251,7 @@ Panel {
     var s = root.store
     var dev = s.selectedDevice
     if (!s.hasAdb) {
-      out.push({ type: "note", urgent: true, label: "adb not found", detail: "Set the adb path in the plugin settings." })
+      out.push({ type: "note", urgent: true, label: "adb not found", detail: noAdbDetail() })
       return false
     }
     if (!dev) {
@@ -263,7 +283,7 @@ Panel {
       if (s.busy && s.runningCommand === "packages") out.push({ type: "note", label: "Listing packages…" })
       else if (s.packagesInfo && s.packagesInfo.system_apps) out.push({ type: "note", label: "No packages", detail: "Press r to list again." })
       else out.push({ type: "note", label: "No third-party packages on this device",
-                      detail: "Turn on Show system apps in the plugin settings to list every package." })
+                      detail: "Turn on Show system apps on the Settings page to list every package." })
       return out
     }
     var f = query.toLowerCase()
@@ -591,13 +611,6 @@ Panel {
     return out
   }
 
-  function soonRows() {
-    for (var i = 0; i < pageRows.length; i++)
-      if (pageRows[i].page === page)
-        return [{ type: "note", label: pageRows[i].detail, detail: "Coming in version " + pageRows[i].version + "." }]
-    return [{ type: "note", label: "Coming in a later version." }]
-  }
-
   function keyHint() {
     if (page === "hub") return "j/k move · Enter opens · r refreshes · Esc closes"
     if (page === "devices") return "j/k move · Enter selects · r refreshes · Esc back"
@@ -609,7 +622,207 @@ Panel {
     if (page === "apks") return "Type a folder · ↑/↓ move · Enter installs · r lists again · Esc back"
     if (page === "text") return "Type a line, Enter sends it · ↑/↓ move · Esc back"
     if (page === "tools") return "j/k move · Enter runs it · r reads again · Esc back"
+    if (page === "settings") return "j/k or Tab move · Enter edits or flips · Enter on Save · Esc cancels"
     return "Esc or Backspace back"
+  }
+
+  // ---- Settings -----------------------------------------------------------
+  // The nine settings live inline on the plugin's shell.json entry. The
+  // form edits copies (the fields' text, `pending*` for the toggles) and
+  // Save writes the keys that changed in one `updateEntryInline`, which
+  // the shell patches into the running widget in place (no remount, the
+  // panel stays open); the new entry reaches the service through the host
+  // widget, so the store's next run and the restarted tracker carry it at
+  // once. The manifest's defaults, repeated: QML cannot read manifest.json
+  // cheaply (tests/test_manifest.py pins the copies together, with the
+  // helper's and the store's key lists).
+  readonly property var settingsDefaults: ({ adbPath: "", screenshotDir: "", recordingDir: "", apkDir: "~/Downloads", scrcpyArgs: "",
+                                             notify: true, deviceNotifications: true, confirmUninstall: true, showSystemApps: false })
+  readonly property var settingsTextKeys: ["adbPath", "screenshotDir", "recordingDir", "apkDir", "scrcpyArgs"]
+  readonly property var settingsBoolKeys: ["notify", "deviceNotifications", "confirmUninstall", "showSystemApps"]
+  property bool pendingNotify: true
+  property bool pendingDeviceNotifications: true
+  property bool pendingConfirmUninstall: true
+  property bool pendingShowSystemApps: false
+  // The keyboard cursor over the form's controls, in `formControls` order.
+  property int formCursor: 0
+  // What a text field held when its editor took the keys, for Escape.
+  property string fieldEditStart: ""
+
+  function settingValue(key) { return store ? store.setting(key, settingsDefaults[key]) : settingsDefaults[key] }
+  function settingText(key) {
+    var v = settingValue(key)
+    return v === null || v === undefined ? "" : String(v)
+  }
+  function settingFlag(key) { return store ? store.flag(key, settingsDefaults[key]) : settingsDefaults[key] }
+
+  readonly property var formFields: [adbPathField, screenshotDirField, recordingDirField, apkDirField, scrcpyArgsField]
+  readonly property var formToggles: [notifyToggle, deviceNotificationsToggle, confirmUninstallToggle, showSystemAppsToggle]
+  readonly property var formControls: formFields.concat(formToggles).concat([saveButton, cancelButton])
+
+  function pendingFlag(key) {
+    return key === "notify" ? pendingNotify : key === "deviceNotifications" ? pendingDeviceNotifications
+      : key === "confirmUninstall" ? pendingConfirmUninstall : pendingShowSystemApps
+  }
+
+  function setPendingFlag(key, value) {
+    if (key === "notify") pendingNotify = value
+    else if (key === "deviceNotifications") pendingDeviceNotifications = value
+    else if (key === "confirmUninstall") pendingConfirmUninstall = value
+    else if (key === "showSystemApps") pendingShowSystemApps = value
+  }
+
+  // The pending values start as what is saved, or the manifest's default.
+  function loadPendingSettings() {
+    for (var i = 0; i < settingsTextKeys.length; i++) formFields[i].text = settingText(settingsTextKeys[i])
+    for (var k = 0; k < settingsBoolKeys.length; k++) setPendingFlag(settingsBoolKeys[k], settingFlag(settingsBoolKeys[k]))
+    formCursor = 0
+    settingsScroll.contentY = 0
+  }
+
+  // The clock panel's pattern: merge over the entry, apply locally first so
+  // the service and this panel react now, then one atomic shell.json write.
+  // `updateEntryInline` replaces the whole entry, hence the merge. Returns
+  // whether anything was written (a widget outside the bar layout cannot).
+  function persistSettings(values) {
+    var entry = { id: moduleName }
+    var current = root.settings || ({})
+    for (var k in current) if (k !== "id") entry[k] = current[k]
+    for (var key in values) entry[key] = values[key]
+    root.settings = entry
+    if (hostWidget && "settings" in hostWidget) hostWidget.settings = entry
+    if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function")
+      return bar.shell.updateEntryInline(moduleName, entry) === true
+    return false
+  }
+
+  function saveSettings() {
+    if (!isSettingsForm) return
+    keyCatcher.forceActiveFocus()
+    var changed = {}
+    var any = false
+    for (var i = 0; i < settingsTextKeys.length; i++) {
+      var key = settingsTextKeys[i]
+      var value = String(formFields[i].text).trim()
+      if (value !== settingText(key).trim()) { changed[key] = value; any = true }
+    }
+    for (var b = 0; b < settingsBoolKeys.length; b++) {
+      var bkey = settingsBoolKeys[b]
+      var saved = settingValue(bkey)
+      // Written as a boolean, also when it was stored as the word "false".
+      var word = saved !== undefined && saved !== null && saved !== true && saved !== false
+      if (pendingFlag(bkey) !== settingFlag(bkey) || word) { changed[bkey] = pendingFlag(bkey); any = true }
+    }
+    if (!any) { pop(); return }
+    var written = persistSettings(changed)
+    if (store) store.showNotice(written ? "Settings saved" : "Settings kept for this session only: the widget is not in the bar layout", !written)
+    pop()
+    // The adb path or a folder may have moved: the hub's rows follow.
+    if (store) store.refreshStatus()
+  }
+
+  function moveFormCursor(delta) {
+    var n = formControls.length
+    formCursor = (formCursor + delta + n) % n
+    ensureFormCursorVisible()
+  }
+
+  function ensureFormCursorVisible() {
+    var item = formControls[formCursor]
+    if (!item) return
+    var top = item.mapToItem(settingsForm, 0, 0).y
+    var bottom = top + item.height
+    if (top < settingsScroll.contentY) settingsScroll.contentY = top
+    else if (bottom > settingsScroll.contentY + settingsScroll.height)
+      settingsScroll.contentY = Math.max(0, bottom - settingsScroll.height)
+  }
+
+  // h/l and the arrows flip a toggle; a text field is edited with Enter.
+  function stepFormControl(dx) {
+    var at = formToggles.indexOf(formControls[formCursor])
+    if (at !== -1) setPendingFlag(settingsBoolKeys[at], !pendingFlag(settingsBoolKeys[at]))
+  }
+
+  // Enter and Space: a text field takes the keys, a toggle flips, the
+  // buttons act.
+  function activateFormControl() {
+    var c = formControls[formCursor]
+    var field = formFields.indexOf(c)
+    var toggle = formToggles.indexOf(c)
+    if (field !== -1) { c.input.forceActiveFocus(); c.input.cursorPosition = c.input.length }
+    else if (toggle !== -1) setPendingFlag(settingsBoolKeys[toggle], !pendingFlag(settingsBoolKeys[toggle]))
+    else if (c === saveButton) saveSettings()
+    else if (c === cancelButton) pop()
+  }
+
+  // Keys that reach a text field while it has them: Enter keeps the text
+  // and returns to the catcher, Escape puts the value from before back,
+  // Tab and the arrows leave for the next control. Everything else edits.
+  function formFieldKey(event, input) {
+    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+      keyCatcher.forceActiveFocus()
+      event.accepted = true
+    } else if (event.key === Qt.Key_Escape) {
+      input.text = fieldEditStart
+      keyCatcher.forceActiveFocus()
+      event.accepted = true
+    } else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab || event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+      keyCatcher.forceActiveFocus()
+      moveFormCursor(event.key === Qt.Key_Tab || event.key === Qt.Key_Down ? 1 : -1)
+      event.accepted = true
+    }
+  }
+
+  // True while a text field owns the keyboard; the catcher is blocked
+  // then, and Backspace edits instead of popping the page.
+  readonly property bool settingsKeysOwned: adbPathField.input.activeFocus || screenshotDirField.input.activeFocus
+    || recordingDirField.input.activeFocus || apkDirField.input.activeFocus || scrcpyArgsField.input.activeFocus
+
+  // A labelled text field for the form: the label, the field, a hint. The
+  // field's `text` is the pending value; `input` is the kit TextField.
+  component SettingField: Column {
+    id: settingField
+    required property int slot
+    property string label: ""
+    property string hint: ""
+    property string placeholder: ""
+    property alias text: settingInput.text
+    readonly property alias input: settingInput
+    spacing: Style.space(3)
+
+    Text {
+      width: parent.width
+      textFormat: Text.PlainText
+      text: settingField.label
+      color: root.contentForeground
+      font.family: root.contentFontFamily
+      font.pixelSize: Style.font.caption
+      font.bold: true
+      elide: Text.ElideRight
+    }
+
+    TextField {
+      id: settingInput
+      width: parent.width
+      foreground: root.contentForeground
+      font.family: root.contentFontFamily
+      placeholderText: settingField.placeholder
+      hasCursor: root.formCursor === settingField.slot
+      onHoveredChanged: if (hovered) root.formCursor = settingField.slot
+      onActiveFocusChanged: if (activeFocus) { root.formCursor = settingField.slot; root.fieldEditStart = text }
+      Keys.onPressed: function(event) { root.formFieldKey(event, settingInput) }
+    }
+
+    Text {
+      visible: settingField.hint !== ""
+      width: parent.width
+      textFormat: Text.PlainText
+      text: settingField.hint
+      color: root.mutedForeground
+      font.family: root.contentFontFamily
+      font.pixelSize: Style.font.caption
+      wrapMode: Text.Wrap
+    }
   }
 
   // ---- Cursor -------------------------------------------------------------
@@ -774,7 +987,8 @@ Panel {
     focusTarget: root.hasField ? filterField : keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(380))
     contentHeight: panel.fittedContentHeight(
-      contentColumn.implicitHeight + (root.hasField ? filterField.height + Style.space(6) : 0), Style.space(760))
+      root.isSettingsForm ? settingsForm.implicitHeight + Style.space(12)
+      : contentColumn.implicitHeight + (root.hasField ? filterField.height + Style.space(6) : 0), Style.space(760))
 
     // Unhandled keys from the catcher (it never accepts Backspace, and
     // nothing while blocked) land here: the dialog's keys, then Backspace.
@@ -787,7 +1001,7 @@ Panel {
           if (confirmDialog.handleKey(event)) event.accepted = true
           return
         }
-        if (event.key === Qt.Key_Backspace && !filterField.activeFocus) {
+        if (event.key === Qt.Key_Backspace && !filterField.activeFocus && !root.settingsKeysOwned) {
           root.pop()
           event.accepted = true
         }
@@ -797,12 +1011,25 @@ Panel {
         id: keyCatcher
         anchors.fill: parent
         clip: true
-        blocked: filterField.activeFocus || root.confirmOpen
-        onMoveRequested: function(dx, dy) { if (dy !== 0) root.moveCursor(dy) }
-        onActivateRequested: root.activate(root.rows[root.selectedIndex])
+        blocked: filterField.activeFocus || root.confirmOpen || root.settingsKeysOwned
+        onMoveRequested: function(dx, dy) {
+          if (root.isSettingsForm) {
+            if (dy !== 0) root.moveFormCursor(dy)
+            else if (dx !== 0) root.stepFormControl(dx)
+          } else if (dy !== 0) root.moveCursor(dy)
+        }
+        onActivateRequested: {
+          if (root.isSettingsForm) root.activateFormControl()
+          else root.activate(root.rows[root.selectedIndex])
+        }
         onCloseRequested: root.pop()
-        onTabRequested: function(direction) { root.switchPanel(direction) }
+        // Tab walks the settings form; elsewhere it switches bar panels.
+        onTabRequested: function(direction) {
+          if (root.isSettingsForm) root.moveFormCursor(direction)
+          else root.switchPanel(direction)
+        }
         onTextKey: function(t) {
+          if (root.isSettingsForm) return
           if (t === "r" || t === "R") root.refresh()
           else if (t === "/" && root.hasField) filterField.forceActiveFocus()
         }
@@ -849,6 +1076,7 @@ Panel {
 
         Flickable {
           id: listScroll
+          visible: !root.isSettingsForm
           anchors.top: root.hasField ? filterField.bottom : parent.top
           anchors.topMargin: root.hasField ? Style.space(6) : 0
           anchors.left: parent.left
@@ -1055,6 +1283,215 @@ Panel {
                 }
               }
             }
+          }
+        }
+      }
+
+      // The settings page. Outside the row Repeater: a tracker frame
+      // landing rebuilds `rows` and must not reset a half-edited field.
+      // The kit's controls paint themselves; the keyboard cursor
+      // (`formCursor`) is ours, driven from the key catcher.
+      Flickable {
+        id: settingsScroll
+        visible: root.isSettingsForm
+        anchors.fill: parent
+        anchors.leftMargin: Style.space(8)
+        anchors.rightMargin: Style.space(8)
+        contentWidth: width
+        contentHeight: settingsForm.implicitHeight
+        boundsBehavior: Flickable.StopAtBounds
+        interactive: contentHeight > height
+
+        Column {
+          id: settingsForm
+          width: settingsScroll.width
+          spacing: Style.space(8)
+
+          // ‹ Settings, clicking it backs out, like the list titles.
+          Item {
+            width: parent.width
+            height: Style.space(30)
+
+            Row {
+              anchors.fill: parent
+              spacing: Style.space(8)
+
+              Text {
+                height: parent.height
+                textFormat: Text.PlainText
+                text: "‹"
+                color: root.mutedForeground
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.title
+                verticalAlignment: Text.AlignVCenter
+              }
+
+              Text {
+                height: parent.height
+                textFormat: Text.PlainText
+                text: "Settings"
+                color: root.contentForeground
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.title
+                font.bold: true
+                verticalAlignment: Text.AlignVCenter
+              }
+            }
+
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.pop()
+            }
+          }
+
+          Text {
+            width: parent.width
+            textFormat: Text.PlainText
+            text: "Saved on the plugin's entry in shell.json and applied at once. Empty means the default."
+            color: root.mutedForeground
+            font.family: root.contentFontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+          }
+
+          SettingField {
+            id: adbPathField
+            slot: 0
+            width: parent.width
+            label: "adb binary"
+            placeholder: "auto-detect"
+            hint: root.store && root.store.hasAdb ? "In use: " + root.store.adbText
+              : "Empty looks in $ANDROID_HOME or $ANDROID_SDK_ROOT, then ~/Android/Sdk/platform-tools, then PATH. A folder means the adb inside it."
+          }
+
+          SettingField {
+            id: screenshotDirField
+            slot: 1
+            width: parent.width
+            label: "Screenshot folder"
+            placeholder: "Omarchy's screenshot folder"
+            hint: "Empty uses OMARCHY_SCREENSHOT_DIR, else your Pictures folder."
+          }
+
+          SettingField {
+            id: recordingDirField
+            slot: 2
+            width: parent.width
+            label: "Recording folder"
+            placeholder: "Omarchy's screen recording folder"
+            hint: "Empty uses OMARCHY_SCREENRECORD_DIR, else your Videos folder."
+          }
+
+          SettingField {
+            id: apkDirField
+            slot: 3
+            width: parent.width
+            label: "APK folder"
+            placeholder: "~/Downloads"
+            hint: "Where the APKs page starts looking for .apk files."
+          }
+
+          SettingField {
+            id: scrcpyArgsField
+            slot: 4
+            width: parent.width
+            label: "Extra scrcpy arguments"
+            placeholder: "none"
+            hint: "Appended to the scrcpy command line, split on whitespace: --always-on-top --keyboard=uhid"
+          }
+
+          Toggle {
+            id: notifyToggle
+            width: parent.width
+            label: "Notifications"
+            description: "Desktop notifications for actions and captures."
+            checked: root.pendingNotify
+            foreground: root.contentForeground
+            fontFamily: root.contentFontFamily
+            activeFocusOnTab: false
+            hasCursor: root.formCursor === 5
+            onHovered: function(on) { if (on) root.formCursor = 5 }
+            onClicked: { root.formCursor = 5; root.pendingNotify = !root.pendingNotify }
+          }
+
+          Toggle {
+            id: deviceNotificationsToggle
+            width: parent.width
+            label: "Device notifications"
+            description: "Notify when a device connects, disconnects or needs authorising."
+            checked: root.pendingDeviceNotifications
+            foreground: root.contentForeground
+            fontFamily: root.contentFontFamily
+            activeFocusOnTab: false
+            hasCursor: root.formCursor === 6
+            onHovered: function(on) { if (on) root.formCursor = 6 }
+            onClicked: { root.formCursor = 6; root.pendingDeviceNotifications = !root.pendingDeviceNotifications }
+          }
+
+          Toggle {
+            id: confirmUninstallToggle
+            width: parent.width
+            label: "Confirm uninstall"
+            description: "Ask before uninstalling an app."
+            checked: root.pendingConfirmUninstall
+            foreground: root.contentForeground
+            fontFamily: root.contentFontFamily
+            activeFocusOnTab: false
+            hasCursor: root.formCursor === 7
+            onHovered: function(on) { if (on) root.formCursor = 7 }
+            onClicked: { root.formCursor = 7; root.pendingConfirmUninstall = !root.pendingConfirmUninstall }
+          }
+
+          Toggle {
+            id: showSystemAppsToggle
+            width: parent.width
+            label: "Show system apps"
+            description: "List every package on the Apps page, not only third-party ones."
+            checked: root.pendingShowSystemApps
+            foreground: root.contentForeground
+            fontFamily: root.contentFontFamily
+            activeFocusOnTab: false
+            hasCursor: root.formCursor === 8
+            onHovered: function(on) { if (on) root.formCursor = 8 }
+            onClicked: { root.formCursor = 8; root.pendingShowSystemApps = !root.pendingShowSystemApps }
+          }
+
+          Item { width: 1; height: Style.space(2) }
+
+          Row {
+            spacing: Style.space(8)
+
+            Button {
+              id: saveButton
+              text: "Save"
+              bordered: true
+              foreground: root.contentForeground
+              fontFamily: root.contentFontFamily
+              hasCursor: root.formCursor === 9
+              onHovered: function(on) { if (on) root.formCursor = 9 }
+              onClicked: root.saveSettings()
+            }
+
+            Button {
+              id: cancelButton
+              text: "Cancel"
+              foreground: root.mutedForeground
+              fontFamily: root.contentFontFamily
+              hasCursor: root.formCursor === 10
+              onHovered: function(on) { if (on) root.formCursor = 10 }
+              onClicked: root.pop()
+            }
+          }
+
+          Text {
+            width: parent.width
+            textFormat: Text.PlainText
+            text: root.keyHint()
+            color: root.mutedForeground
+            font.family: root.contentFontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
           }
         }
       }

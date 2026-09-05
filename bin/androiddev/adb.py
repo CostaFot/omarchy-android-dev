@@ -97,18 +97,35 @@ def _executable(path):
     return bool(path) and os.path.isfile(path) and os.access(path, os.X_OK)
 
 
+def _setting_path(settings):
+    """The adbPath setting as a file path ("" when unset): `~` expanded, a
+    directory means the adb inside it."""
+    setting = os.path.expanduser(str(settings.get("adbPath") or "").strip())
+    if setting and os.path.isdir(setting):
+        setting = os.path.join(setting, "adb")
+    return setting
+
+
+def missing_text(settings):
+    """The `no_adb` message: why resolve() found nothing and what to do."""
+    setting = _setting_path(settings)
+    if os.environ.get("OMARCHY_ANDROID_DEV_PATH") is None and setting:
+        return f"No adb at {fmt.display_path(setting)}. Fix the adbPath setting, or clear it to look in the SDK and on PATH again"
+    return "No adb found. Set adbPath in the plugin settings, or install the android-tools package or the SDK platform-tools"
+
+
 def resolve(settings):
     """(path, source) or (None, None). `source` is one of override,
     setting, env, home, path."""
     override = os.environ.get("OMARCHY_ANDROID_DEV_PATH")
     if override is not None:
         return (override, "override") if _executable(override) else (None, None)
-    setting = os.path.expanduser(str(settings.get("adbPath") or "").strip())
+    setting = _setting_path(settings)
     if setting:
-        if os.path.isdir(setting):
-            setting = os.path.join(setting, "adb")
-        if _executable(setting):
-            return setting, "setting"
+        # An explicit setting is an instruction, not a hint: a path that does
+        # not hold adb is reported (`missing_text`), never silently replaced
+        # by whatever the SDK or PATH would have given.
+        return (setting, "setting") if _executable(setting) else (None, None)
     for var in ("ANDROID_HOME", "ANDROID_SDK_ROOT"):
         root = os.environ.get(var)
         if root:
@@ -308,7 +325,11 @@ class Adb:
         self._server_checked = False
 
     def describe(self):
-        return {"path": self.path, "source": self.source}
+        """The envelope's `adb`: where it is and how it was found, with a
+        display line for the panel (`~/Android/Sdk/platform-tools/adb · found in ~/Android/Sdk`)."""
+        return {"path": self.path, "source": self.source, "path_text": fmt.display_path(self.path),
+                "source_text": fmt.adb_source_text(self.source),
+                "text": f"{fmt.display_path(self.path)} · {fmt.adb_source_text(self.source)}"}
 
     def ensure_server(self):
         """`adb start-server` once per run, under a lock file in the state

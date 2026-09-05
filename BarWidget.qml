@@ -29,6 +29,8 @@ BarWidget {
   readonly property bool popoutSwitchClosing: devPanel ? devPanel.popoutSwitchClosing === true : false
   function closeForPopoutSwitch() { if (devPanel) devPanel.closeForPopoutSwitch() }
   function showPage(name) { if (devPanel) devPanel.showPage(name) }
+  // The page the panel shows, for the service's `status`.
+  readonly property string page: devPanel && devPanel.page !== undefined ? String(devPanel.page) : ""
   function refresh() { if (store) store.refreshStatus() }
 
   function injectPanel() {

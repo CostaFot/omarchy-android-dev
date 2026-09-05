@@ -108,6 +108,19 @@ def avd_detail(serial):
     return f"Running · {clean(serial)}" if serial else "Stopped"
 
 
+ADB_SOURCES = {
+    "override": "from OMARCHY_ANDROID_DEV_PATH",
+    "setting": "from the adbPath setting",
+    "env": "from the SDK in $ANDROID_HOME or $ANDROID_SDK_ROOT",
+    "home": "found in ~/Android/Sdk",
+    "path": "found on PATH",
+}
+
+
+def adb_source_text(source):
+    return ADB_SOURCES.get(str(source or ""), "found")
+
+
 def display_path(path):
     home = os.path.expanduser("~")
     p = str(path or "")

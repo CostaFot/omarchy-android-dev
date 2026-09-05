@@ -194,11 +194,14 @@ class Context:
         self._devices = None
 
     def adb_info(self):
-        return self.adb.describe() if self.adb else {"path": None, "source": None}
+        return self.adb.describe() if self.adb else {"path": None, "source": None, "path_text": None, "source_text": None, "text": None}
+
+    def no_adb(self):
+        return AdbError("no_adb", adbmod.missing_text(self.settings))
 
     def require_adb(self):
         if not self.adb:
-            raise AdbError("no_adb", "No adb found. Set adbPath in the plugin settings, or install the android-tools package or the SDK platform-tools")
+            raise self.no_adb()
         self.adb.ensure_server()
         return self.adb
 
@@ -520,7 +523,7 @@ def dispatch(argv, disarm):
         disarm()  # streams forever by design
         ctx = Context(settings, serial)
         if not ctx.adb:
-            doc = envelope("track", ok=False, error=AdbError("no_adb", "No adb found. Set adbPath in the plugin settings, or install the android-tools package or the SDK platform-tools").to_dict(), event="error")
+            doc = envelope("track", ok=False, error=ctx.no_adb().to_dict(), adb=ctx.adb_info(), event="error")
             emit(doc)
             return None
         try:

@@ -7,8 +7,8 @@ import Quickshell.Io
 // enabled (`keepLoaded`). Owns the Store (the helper queue and the last
 // documents), the device tracker (one `omarchy-android-dev track` process,
 // restarted with backoff), the screen recorder (one `record` process while
-// a recording runs), the device notifications and the plugin's IPC
-// target. Bar widgets register themselves as hosts; the first one lends
+// a recording runs), the pairer (one `pair qr` process while a pairing
+// code is up), the device notifications and the plugin's IPC target. Bar widgets register themselves as hosts; the first one lends
 // its settings (the shell injects settings only into bar widgets) and the
 // panel verbs route through the shell's own summon/hide, which picks the
 // widget on the focused monitor.
@@ -280,6 +280,112 @@ Item {
     onTriggered: root.recordingSeconds = Math.floor((Date.now() - root.recordingStartedAt) / 1000)
   }
 
+  // ---- The pairer ----------------------------------------------------------
+  // `pair qr` writes a pairing code as a PNG, streams one `pairing` event
+  // naming it, then waits (two minutes at most) for the phone to scan it
+  // from its Wireless debugging screen and pairs; the final document
+  // (`paired`, or an `error`) goes through the store like any other. A
+  // cancel (`pairer.signal(2)`, what Ctrl-C does) removes the PNG and
+  // prints nothing, so "Pairing cancelled" is said here. One session per shell.
+  property bool pairing: false
+  property bool pairingStopping: false
+  property string pairingQr: ""
+  property string pairingName: ""
+  property int pairingWindow: 120
+  property double pairingStartedAt: 0
+  property int pairingSeconds: 0
+  readonly property bool pairerRunning: pairer.running
+
+  function pairerCommand() {
+    return ["/bin/sh", "-c", 'exec "$0" "$@"', "/usr/bin/python3",
+            pluginDir + "/bin/omarchy-android-dev", "--settings", store.settingsJson, "pair", "qr"]
+  }
+
+  function startPairing() {
+    if (pairer.running) return "already pairing"
+    pairing = false
+    pairingStopping = false
+    pairingQr = ""
+    pairingName = ""
+    pairingSeconds = 0
+    pairer.command = pairerCommand()
+    pairer.running = true
+    return "requested"
+  }
+
+  function stopPairing() {
+    if (!pairer.running) return "not pairing"
+    pairingStopping = true
+    pairer.signal(2)  // SIGINT: the helper removes the PNG and exits quietly
+    return "stopping"
+  }
+
+  function togglePairing() { return pairer.running ? stopPairing() : startPairing() }
+
+  function applyPairerLine(line) {
+    var text = String(line || "").trim()
+    if (text === "" || text.length > 65536) return
+    var ev
+    try {
+      ev = JSON.parse(text)
+    } catch (e) {
+      return
+    }
+    if (!ev || typeof ev !== "object") return
+    if (ev.event === "pairing") {
+      pairingQr = String(ev.qr_path || "")
+      pairingName = String(ev.name || "")
+      pairingWindow = Number(ev.seconds) > 0 ? Number(ev.seconds) : 120
+      pairingStartedAt = Date.now()
+      pairingSeconds = 0
+      pairing = true
+      return
+    }
+    // The final document (`paired` or `error`): merged like any other, so
+    // the notice, the new device list and lastError are the panel's.
+    pairing = false
+    pairingQr = ""
+    var doc = store.handle(text)
+    if (!store.notifyEnabled) return
+    if (doc && doc.ok !== false && doc.notice) notify(String(doc.notice), String(doc.address || ""))
+    else if (store.lastError !== "") notify(store.lastError, "")
+  }
+
+  Process {
+    id: pairer
+    stdout: SplitParser {
+      onRead: function(line) { root.applyPairerLine(line) }
+    }
+    onRunningChanged: {
+      if (running) return
+      pairerExitFallback.restart()
+    }
+  }
+
+  Timer {
+    id: pairerExitFallback
+    interval: 300
+    repeat: false
+    onTriggered: {
+      if (root.pairing) {
+        // Ended without a final document: cancelled (nothing is printed
+        // then, by design), could not start, or was killed.
+        root.pairing = false
+        root.store.showNotice(root.pairingStopping ? "Pairing cancelled" : "The pairing session ended without an answer", !root.pairingStopping)
+      }
+      root.pairingStopping = false
+      root.pairingQr = ""
+      root.pairingName = ""
+    }
+  }
+
+  Timer {
+    interval: 1000
+    repeat: true
+    running: root.pairing
+    onTriggered: root.pairingSeconds = Math.floor((Date.now() - root.pairingStartedAt) / 1000)
+  }
+
   // omarchy-notification-send as argv, fire and forget. Device labels are
   // one argument each, never a shell string.
   function notify(headline, body) {
@@ -334,6 +440,7 @@ Item {
     stopping = true
     stopTracker()
     if (recorder.running) recorder.signal(2)
+    if (pairer.running) pairer.signal(2)
     if (store.proc.running) store.proc.signal(15)
   }
 
@@ -343,8 +450,9 @@ Item {
   // notification is for the terminal and for the panel being closed. The
   // helper's own notification (screenshots) is not doubled.
   // `silent` skips the notification (the APK page's Install all sends one
-  // summary instead of one per file).
-  function act(args, onDone, silent) {
+  // summary instead of one per file). `stdinText` reaches the helper's
+  // stdin (the pairing code).
+  function act(args, onDone, silent, stdinText) {
     store.run(args, function(doc) {
       if (args[0] !== "screenshot" && store.notifyEnabled && silent !== true) {
         var dev = store.selectedDevice
@@ -352,7 +460,7 @@ Item {
         else if (store.lastError !== "") notify(store.lastError, dev ? dev.label : "")
       }
       if (typeof onDone === "function") onDone(doc)
-    })
+    }, stdinText)
     return "requested"
   }
 
@@ -362,6 +470,18 @@ Item {
   function validPackage(pkg) {
     var p = String(pkg || "").trim()
     return p !== "" && p.length <= 256 && /^[A-Za-z0-9_.]+$/.test(p) ? p : ""
+  }
+
+  function validSerial(serial) {
+    var s = String(serial || "").trim()
+    return s !== "" && s.length <= 128 && /^[A-Za-z0-9._:\-]+$/.test(s) ? s : ""
+  }
+
+  // `host` or `host:port` as `adb connect` takes it (IPv4 or a name; the
+  // helper refuses IPv6 and says so).
+  function validAddress(address) {
+    var a = String(address || "").trim()
+    return a !== "" && a.length <= 260 && /^[A-Za-z0-9][A-Za-z0-9.-]*(:\d{1,5})?$/.test(a) ? a : ""
   }
 
   // One line of printable ASCII, 500 characters at most: what `input text`
@@ -435,6 +555,7 @@ Item {
       error_code: s.lastErrorCode,
       error: s.lastError,
       recording: { active: recording, stopping: recordingStopping, seconds: recordingSeconds, device_path: recordingDevicePath },
+      pairing: { active: pairing, stopping: pairingStopping, seconds: pairingSeconds, window: pairingWindow, qr_path: pairingQr, name: pairingName },
       hosts: hosts.length,
       opened: opened,
       page: opened ? panelPage : ""
@@ -445,8 +566,8 @@ Item {
     "omarchy-shell costafot.android-dev <verb> [args]",
     "  help                 this list",
     "  open | close | toggle  the panel (show/hide are aliases)",
-    "  page NAME            open the panel on a page: hub devices packages deeplink toggles capture apks text tools settings",
-    "  status               one JSON line: adb, settings, devices, tracker, recording, the open page, errors",
+    "  page NAME            open the panel on a page: hub devices packages deeplink toggles capture apks text tools wireless settings",
+    "  status               one JSON line: adb, settings, devices, tracker, recording, pairing, the open page, errors",
     "  devices              one JSON line: the attached devices",
     "  select SERIAL        make SERIAL the selected device",
     "  launch PKG           start PKG's launcher activity on the selected device",
@@ -461,6 +582,11 @@ Item {
     "  scrcpy               mirror the selected device with scrcpy",
     "  avd NAME             start that emulator (refused while it runs)",
     "  logcat [PKG]         adb logcat in a terminal, following PKG's process when given",
+    "  pair start|stop|toggle  a pairing QR code in the panel; the phone scans it from Wireless debugging",
+    "  connect ADDR         adb connect host[:port] (5555 without a port), then wait until it is ready",
+    "  disconnect ADDR      adb disconnect host[:port]",
+    "  tcpip SERIAL         go wireless: adb tcpip 5555 on that plugged phone, connect to its Wi-Fi address, select it (\"\" for the selected device)",
+    "  usb SERIAL           back to USB (adb usb) for that entry; the Wi-Fi one drops (\"\" for the selected device)",
     "  refresh              re-read adb and the device list",
     "Action verbs return at once; the result arrives as a notification and in the panel.",
     "Settings: the panel's Settings page, or `omarchy bar set costafot.android-dev KEY VALUE` (adbPath screenshotDir",
@@ -486,8 +612,8 @@ Item {
     function status(): string { return root.statusJson() }
     function devices(): string { return JSON.stringify({ devices: root.store.devices, selected: root.store.selected }) }
     function select(serial: string): string {
-      var s = String(serial || "").trim()
-      if (s === "" || !/^[A-Za-z0-9._:\-]+$/.test(s)) return "select needs a device serial"
+      var s = root.validSerial(serial)
+      if (s === "") return "select needs a device serial"
       root.store.selectDevice(s)
       return "requested"
     }
@@ -539,6 +665,33 @@ Item {
       if (p === "") return root.act(["tool", "logcat"])
       var v = root.validPackage(p)
       return v === "" ? "logcat takes a package name, or nothing for the whole log" : root.act(["tool", "logcat", v])
+    }
+    function pair(mode: string): string {
+      var m = String(mode || "").trim().toLowerCase()
+      if (m === "start") return root.startPairing()
+      if (m === "stop") return root.stopPairing()
+      if (m === "" || m === "toggle") return root.togglePairing()
+      return "pair takes start, stop or toggle"
+    }
+    function connect(address: string): string {
+      var a = root.validAddress(address)
+      return a === "" ? "connect needs an address as ip:port" : root.act(["connect", a])
+    }
+    function disconnect(address: string): string {
+      var a = root.validAddress(address)
+      return a === "" ? "disconnect needs an address as ip:port" : root.act(["disconnect", a])
+    }
+    function tcpip(serial: string): string {
+      var s = String(serial || "").trim()
+      if (s === "") return root.act(["tcpip"])
+      var v = root.validSerial(s)
+      return v === "" ? "tcpip takes a USB serial, or nothing for the selected device" : root.act(["tcpip", v])
+    }
+    function usb(serial: string): string {
+      var s = String(serial || "").trim()
+      if (s === "") return root.act(["usb"])
+      var v = root.validSerial(s)
+      return v === "" ? "usb takes a serial, or nothing for the selected device" : root.act(["usb", v])
     }
     function refresh(): string { root.store.refreshStatus(); return "requested" }
   }

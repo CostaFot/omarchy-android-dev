@@ -5,7 +5,7 @@ import Quickshell.Io
 // The data side of the plugin: runs bin/omarchy-android-dev, one process at
 // a time, and holds what the last documents said (adb, devices, the
 // selected serial, packages, toggles, the APK folder, the tools, the
-// status page). Nothing here draws
+// wireless page and its recent addresses, the status page). Nothing here draws
 // and nothing here runs adb: the helper does every adb call with a serial,
 // a deadline and a byte cap, and formats every string. This object parses
 // one JSON line per run and keeps it.
@@ -83,6 +83,11 @@ QtObject {
   // one (what is installed, the AVDs with Running or Stopped).
   property var apkList: null
   property var toolsInfo: null
+  // The last `wireless` document (mDNS yes or no, the services on the
+  // network, the Wi-Fi and plugged devices) and the addresses `connect`
+  // took, newest first (10 kept by the helper).
+  property var wirelessInfo: null
+  property var recentAddresses: []
   property string lastError: ""
   property string lastErrorCode: ""
   // True once any document has landed (the first `status` after load).
@@ -130,6 +135,7 @@ QtObject {
   function refreshToggles() { run(["toggles"], null) }
   function listApks(dir) { run(dir ? ["apk", "list", String(dir)] : ["apk", "list"], null) }
   function refreshTools() { run(["tools"], null) }
+  function refreshWireless() { run(["wireless"], null) }
 
   // The toggles were read from one device; another selection makes them
   // stale until the page reads again.
@@ -177,10 +183,17 @@ QtObject {
   readonly property int helperBudgetSeconds: 60
   readonly property int killGraceMs: 10000
 
+  // What the next run gets on its stdin (a pairing code: never on argv,
+  // where `ps` would show it), written once the process has started and
+  // blanked right after.
+  property string pendingStdin: ""
+
   // Runs one helper command. `onDone(doc)` gets the parsed document (or null
   // when the output was unusable) after its sections have been merged.
-  function run(args, onDone) {
-    var job = { args: args, onDone: onDone }
+  // `stdinText` goes to the helper's stdin (`pair code` reads the six
+  // digits there).
+  function run(args, onDone, stdinText) {
+    var job = { args: args, onDone: onDone, stdin: typeof stdinText === "string" ? stdinText : "" }
     if (busy) { pendingRun = job; return }
     runGen += 1
     var gen = runGen
@@ -201,6 +214,8 @@ QtObject {
                     pluginDir + "/bin/omarchy-android-dev", "--settings", settingsJson].concat(args)
     // The helper arms its own alarm from this; keep the two in step.
     proc.environment = { OMARCHY_ANDROID_DEV_TOTAL_BUDGET: String(helperBudgetSeconds) }
+    pendingStdin = job.stdin
+    proc.stdinEnabled = pendingStdin !== ""
     proc.running = true
     exitFallback.gen = gen
     killTimer.gen = gen
@@ -233,6 +248,7 @@ QtObject {
   function finalizeRun() {
     var job = currentRun
     currentRun = null
+    pendingStdin = ""
     var text = capturedText.trim()
     var doc = null
     if (timedOut) {
@@ -252,7 +268,7 @@ QtObject {
     if (pendingRun) {
       var next = pendingRun
       pendingRun = null
-      Qt.callLater(function() { store.run(next.args, next.onDone) })
+      Qt.callLater(function() { store.run(next.args, next.onDone, next.stdin) })
     }
   }
 
@@ -287,6 +303,8 @@ QtObject {
     if (d.toggles && typeof d.toggles === "object") toggles = d.toggles
     if (d.command === "apk" && Array.isArray(d.apks)) apkList = d
     if (d.command === "tools" && Array.isArray(d.avds)) toolsInfo = d
+    if (d.command === "wireless" && d.mdns && typeof d.mdns === "object") wirelessInfo = d
+    if (Array.isArray(d.recent_addresses)) recentAddresses = d.recent_addresses
     if (Array.isArray(d.recent_deeplinks)) recentDeeplinks = d.recent_deeplinks
     if (d.last_package !== undefined) lastPackage = d.last_package ? String(d.last_package) : ""
     if (d.command === "package" && d.ok !== false && d.name) {
@@ -312,6 +330,16 @@ QtObject {
   }
 
   property Process proc: Process {
+    // The pairing code goes over stdin, never argv (the kit's network
+    // panel does the same with a Wi-Fi secret); stdin is closed right
+    // after so the helper sees the end of it.
+    onStarted: {
+      if (store.pendingStdin !== "") {
+        write(store.pendingStdin)
+        store.pendingStdin = ""
+        stdinEnabled = false
+      }
+    }
     // A command that cannot start emits neither `started` nor `exited`;
     // `running` dropping back to false is the only signal.
     onRunningChanged: {

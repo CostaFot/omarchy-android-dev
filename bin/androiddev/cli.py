@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 
-from . import PLUGIN_ID, actions, adb as adbmod, apk as apkmod, capture, devices as devmod, fmt, packages as pkgmod, plugin_version, text as textmod, toggles as togmod, tools as toolsmod
+from . import PLUGIN_ID, actions, adb as adbmod, apk as apkmod, capture, devices as devmod, fmt, packages as pkgmod, plugin_version, text as textmod, toggles as togmod, tools as toolsmod, wireless as wlmod
 from .adb import Adb, AdbError, PartialError
 from .state import State
 
@@ -62,6 +62,13 @@ HELP = [
     ("tool avd NAME", "start that AVD (refused while it runs)"),
     ("tool avd-stop SERIAL", "stop a running emulator (adb emu kill)"),
     ("tool logcat [PKG]", "adb logcat in a terminal, following PKG's process when given"),
+    ("wireless", "mDNS yes or no, the pairing and connect services on the network, the Wi-Fi and plugged devices, recent addresses"),
+    ("pair qr", "streaming: a pairing QR code as a PNG, then wait for the phone to scan it and pair (Ctrl-C cancels)"),
+    ("pair code ADDR", "pair with the address and six-digit code from Pair device with pairing code; the code is read from stdin, never argv"),
+    ("connect ADDR", "adb connect host[:port] (5555 without a port), then wait until the device is ready"),
+    ("disconnect ADDR", "adb disconnect host[:port]"),
+    ("tcpip [USBSERIAL]", "go wireless: adb tcpip 5555 on the plugged phone, connect to its Wi-Fi address and select that entry"),
+    ("usb [SERIAL]", "back to USB: adb usb; the Wi-Fi entry drops"),
     ("help", "this list"),
 ]
 
@@ -467,6 +474,87 @@ def cmd_tool(ctx, args):
     raise BadArgs(usage)
 
 
+def cmd_wireless(ctx, args):
+    """The Wireless page's document. Works without adb (`no_adb` rides
+    along, the lists empty)."""
+    if args:
+        raise BadArgs("wireless")
+    try:
+        devices = ctx.devices()
+    except AdbError as e:
+        raise PartialError(wlmod.describe(ctx.adb if ctx.adb and e.code != "no_adb" else None, ctx.state, []), e) from e
+    return wlmod.describe(ctx.adb, ctx.state, devices)
+
+
+def _with_devices(ctx, payload, selected=None):
+    """The fresh device list rides in the answer (the store replaces its
+    own from it, ahead of the tracker's next frame)."""
+    if selected:
+        ctx.explicit_serial = selected
+    payload["devices"] = ctx.devices(refresh=True)
+    return payload
+
+
+def cmd_pair(ctx, args):
+    """`pair code ADDR`; `pair qr` is the streaming command dispatch() takes."""
+    if len(args) != 2 or args[0] != "code":
+        raise BadArgs("pair qr | pair code ADDR   (the six digits on stdin)")
+    address = wlmod.check_address(args[1])
+    code = wlmod.read_code()
+    adb = ctx.require_adb()
+    before = {d["serial"] for d in ctx.devices()}
+    payload = wlmod.pair(adb, address, code)
+    payload.update(wlmod.finish_pairing(adb, ctx.state, before, address))
+    return _with_devices(ctx, payload, payload.get("serial"))
+
+
+def cmd_connect(ctx, args):
+    if len(args) != 1:
+        raise BadArgs("connect ADDR")
+    address = wlmod.check_address(args[0])
+    adb = ctx.require_adb()
+    payload = wlmod.connect(adb, address, ctx.state)
+    return _with_devices(ctx, payload)
+
+
+def cmd_disconnect(ctx, args):
+    if len(args) != 1:
+        raise BadArgs("disconnect ADDR")
+    address = wlmod.check_address(args[0])
+    adb = ctx.require_adb()
+    payload = wlmod.disconnect(adb, address)
+    return _with_devices(ctx, payload)
+
+
+def _named_or_selected(ctx, args, usage):
+    """The serial on the command line, else the resolved one; the device must be ready."""
+    if len(args) > 1 or (args and not devmod.valid_serial(args[0])):
+        raise BadArgs(usage)
+    if args:
+        ctx.explicit_serial = args[0]
+    adb, serial = ctx.device()
+    target = next(d for d in ctx.devices() if d["serial"] == serial)
+    return adb, target
+
+
+def cmd_tcpip(ctx, args):
+    adb, target = _named_or_selected(ctx, args, "tcpip [USBSERIAL]")
+    if target["kind"] != "usb":
+        raise AdbError("bad_args", "Go wireless needs the phone on the cable: pick the USB entry")
+    payload = wlmod.go_wireless(adb, target["serial"], ctx.state, target["label"])
+    return _with_devices(ctx, payload, payload["selected"])
+
+
+def cmd_usb(ctx, args):
+    adb, target = _named_or_selected(ctx, args, "usb [SERIAL]")
+    if target["kind"] == "emulator":
+        raise AdbError("bad_args", f"{target['serial']} is an emulator")
+    payload = wlmod.back_to_usb(adb, target["serial"], ctx.devices(), ctx.state, target["label"])
+    ctx.explicit_serial = None
+    payload["devices"] = ctx.devices(refresh=True)
+    return payload
+
+
 def cmd_help(ctx, args):
     return {"commands": [{"usage": u, "text": t} for u, t in HELP], "text": help_text()}
 
@@ -491,6 +579,12 @@ COMMANDS = {
     "text": cmd_text,
     "tools": cmd_tools,
     "tool": cmd_tool,
+    "wireless": cmd_wireless,
+    "pair": cmd_pair,
+    "connect": cmd_connect,
+    "disconnect": cmd_disconnect,
+    "tcpip": cmd_tcpip,
+    "usb": cmd_usb,
     "help": cmd_help,
 }
 
@@ -539,6 +633,23 @@ def dispatch(argv, disarm):
             cmd_record(ctx, args, emit)
         except AdbError as e:
             emit(envelope("record", ok=False, error=e.to_dict(), adb=ctx.adb_info(), event="error"))
+        return None
+    if command == "pair" and args == ["qr"]:
+        disarm()  # waits for the phone to scan, two minutes at most
+        ctx = Context(settings, serial)
+        try:
+            adb = ctx.require_adb()
+            devices = ctx.devices()
+            result = wlmod.pair_qr(adb, ctx.state, lambda p: emit(envelope("pair", ok=True, adb=ctx.adb_info(), selected=ctx.selected(), **p)), devices)
+            if result is not None:
+                emit(envelope("pair", ok=True, adb=ctx.adb_info(), selected=result.get("serial") or ctx.selected(), **result))
+                ctx.state.save()
+        except AdbError as e:
+            emit(envelope("pair", ok=False, error=e.to_dict(), adb=ctx.adb_info(), event="error"))
+        except wlmod.Cancelled:
+            pass
+        except OSError:
+            pass  # the state file could not be written; the pairing itself is done
         return None
     handler = COMMANDS.get(command)
     if handler is None:

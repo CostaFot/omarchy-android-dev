@@ -2,7 +2,7 @@
 
 <img src="preview.png" width="900" alt="the droid in the bar, the hub, a package's actions and the developer toggles">
 
-The Android developer's side of a device, on the [Omarchy](https://omarchy.org) bar: pick a device, pick a package, clear its data, force-stop it, fire a deep link, flip the developer toggles, take a screenshot, record the screen, install an APK, type into a field, start an emulator, mirror with scrcpy, follow logcat. No terminal, no Android Studio.
+The Android developer's side of a device, on the [Omarchy](https://omarchy.org) bar: pick a device, pick a package, clear its data, force-stop it, fire a deep link, flip the developer toggles, take a screenshot, record the screen, install an APK, type into a field, start an emulator, mirror with scrcpy, follow logcat, pair a phone over Wi-Fi and lose the cable. No terminal, no Android Studio.
 
 Started as a port of the Windows [ADB Extension for Command Palette](https://github.com/CostaFot/AdbExtension), the same way [Markets](https://github.com/CostaFot/omarchy-markets) was a port of the Markets extension, and grew into a device hub.
 
@@ -70,7 +70,14 @@ It opens on a hub: the selected device with its state, then the pages. Every pag
 
 <img src="assets/screenshots/tools.png" width="300" alt="the tools page: scrcpy, logcat and the emulators">
 
-**Tools** has *Mirror with scrcpy* (once scrcpy is installed; with *Mirror with the screen off* on, the phone's own screen goes dark and stays awake while the mirror runs, and the *Extra scrcpy arguments* setting is appended), *Logcat* for the package you last opened (`adb logcat --pid=…` in your default terminal; the app has to be running), and one row per emulator AVD showing Running or Stopped: Enter starts a stopped one and, after a confirm, stops a running one. What this page launches is yours to close; the plugin never kills it.
+**Tools** has *Mirror with scrcpy* (once scrcpy is installed; with *Mirror with the screen off* on, the phone's own screen goes dark and stays awake while the mirror runs, and the *Extra scrcpy arguments* setting is appended; the row says whether it mirrors over USB or over Wi-Fi), *Logcat* for the package you last opened (`adb logcat --pid=…` in your default terminal; the app has to be running), and one row per emulator AVD showing Running or Stopped: Enter starts a stopped one and, after a confirm, stops a running one. What this page launches is yours to close; the plugin never kills it.
+
+<p>
+<img src="assets/screenshots/wireless.png" width="300" alt="the wireless page: the three ways to pair or connect, the Wi-Fi devices, the plugged phones">
+<img src="assets/screenshots/wireless-qr.png" width="300" alt="the wireless page while a pairing code is shown">
+</p>
+
+**Wireless** gets a phone onto Wi-Fi debugging, four ways. *Pair with a QR code* shows a code in the panel; on the phone open Developer options › Wireless debugging › *Pair device with QR code* and scan it from there, nowhere else: the code is a Wi-Fi-credential string by format, and a camera app would try to join a network that does not exist. The plugin waits up to two minutes, pairs, and adb connects by itself from then on whenever the phone's Wireless debugging is on (Android picks a new port each time it is toggled; adb finds it through mDNS, so there is nothing to type again). *Pair with a code* takes the address and the six digits from *Pair device with pairing code* (a different port from the one on the main Wireless debugging screen), in two steps in the one box. *Connect to an address* is `adb connect ip:port` for a phone paired before, with the recent addresses under it. *Go wireless*, on a plugged phone, is the older way that needs no pairing: `adb tcpip 5555`, then a connect to the phone's Wi-Fi address; the cable can come out, and the phone appears twice in the picker until it does, the Wi-Fi entry selected. It lasts until the phone reboots; *Back to USB* ends it sooner. Each Wi-Fi entry has Disconnect. A paired phone over Wi-Fi mirrors, records and takes every other page like a plugged one.
 
 <img src="assets/screenshots/settings.png" width="300" alt="the settings form">
 
@@ -99,7 +106,7 @@ Saved on the plugin's entry in `~/.config/omarchy/shell.json`, from the panel's 
 
 `adb`, from the `android-tools` package or the SDK platform-tools. It does not need to be on `PATH`: the plugin looks in `$ANDROID_HOME`, `$ANDROID_SDK_ROOT` and `~/Android/Sdk` too, and the `adbPath` setting can point at it.
 
-A device over USB with USB debugging on, or an emulator. The Tools page needs the SDK's `emulator` for the AVD rows and the `scrcpy` package for mirroring; both are optional and the rows appear when they are installed, no restart needed.
+A device over USB with USB debugging on, or an emulator, or a phone over Wi-Fi: Android 11 or newer with Wireless debugging on for the pairing paths (the QR one also wants the SDK's adb, which has mDNS built in where the `android-tools` one does not, and `qrencode`, which Omarchy ships), any Android with the cable in once for Go wireless. The phone and this machine have to be on the same network with nothing in between: a VPN that isolates the LAN (NordVPN with LAN Discovery off, say) leaves the plugin with timeouts. The Tools page needs the SDK's `emulator` for the AVD rows and the `scrcpy` package for mirroring; both are optional and the rows appear when they are installed, no restart needed.
 
 ## From the shell
 
@@ -109,7 +116,7 @@ omarchy-shell costafot.android-dev toggle        # the hub
 omarchy-shell costafot.android-dev status | jq   # adb, devices, the tracker, the settings in force
 omarchy-shell costafot.android-dev screenshot    # saved, on the clipboard, with a notification
 omarchy-shell costafot.android-dev select emulator-5554
-omarchy-shell costafot.android-dev page packages # open the panel on a page: hub, devices, packages, deeplink, toggles, capture, apks, text, tools, settings
+omarchy-shell costafot.android-dev page packages # open the panel on a page: hub, devices, packages, deeplink, toggles, capture, apks, text, tools, wireless, settings
 omarchy-shell costafot.android-dev launch com.android.chrome   # forcestop and clear take a package too
 omarchy-shell costafot.android-dev deeplink https://example.com
 omarchy-shell costafot.android-dev flip touches  # animations, touches, pointer, layout, airplane, wifi, data, bluetooth, demo
@@ -118,6 +125,9 @@ omarchy-shell costafot.android-dev text "hello world"          # typed into the 
 omarchy-shell costafot.android-dev scrcpy                      # mirror the selected device
 omarchy-shell costafot.android-dev avd Medium_Phone            # start that emulator
 omarchy-shell costafot.android-dev logcat com.android.chrome   # adb logcat --pid in a terminal; no package follows everything
+omarchy-shell costafot.android-dev pair start                  # a pairing QR code in the panel; stop cancels it
+omarchy-shell costafot.android-dev connect 192.168.1.5         # adb connect (5555 without a port); disconnect ADDR undoes it
+omarchy-shell costafot.android-dev tcpip ""                    # go wireless with the selected (plugged) phone; usb "" puts it back
 ```
 
 Every verb returns at once; the result arrives as a notification and in the panel.
@@ -174,6 +184,10 @@ bin/omarchy-android-dev select emulator-5554 | jq .notice               # with m
 bin/omarchy-android-dev apk list ~/Downloads | jq '.apks[].name'        # apk install PATH... installs them in turn
 bin/omarchy-android-dev text send "hello world" | jq .notice            # text clipboard sends the clipboard
 bin/omarchy-android-dev tools | jq '.avds[] | [.name, .detail]'         # tool scrcpy, tool avd NAME, tool avd-stop SERIAL, tool logcat [PKG]
+bin/omarchy-android-dev wireless | jq '{mdns, services}'                # the pairing and connect services on the network
+bin/omarchy-android-dev pair qr                                         # prints the PNG's path, waits for the phone to scan it; Ctrl-C cancels
+printf '123456\n' | bin/omarchy-android-dev pair code 192.168.1.5:37123 # the code on stdin, never on the command line
+bin/omarchy-android-dev connect 192.168.1.5 | jq .notice                # disconnect ADDR; tcpip [USBSERIAL] goes wireless, usb [SERIAL] comes back
 ```
 
 Emulators show up by their AVD name, as in `Pixel 10 Pro Fold (emulator-5554)`.
@@ -182,9 +196,9 @@ Emulators show up by their AVD name, as in `Pixel 10 Pro Fold (emulator-5554)`.
 
 The shell never runs `adb` itself. A Python 3 helper with no dependencies does, started as `/usr/bin/python3` with an argument list, never through a shell string; every adb call is an argument list too, with `-s SERIAL` on every device command, a deadline and a size cap on what it reads back, and a child that outruns either is stopped and reported, never parsed. One device tracker (`adb track-devices`) runs per shell and is restarted with backoff when adb goes away. The plugin never kills a process it did not start: scrcpy, the emulator and the logcat terminal are started detached, the way Omarchy's own launchers start apps, and are left alone; an emulator stops through `adb emu kill`. scrcpy is told to use the same `adb` as the plugin, so a second adb on `PATH` (the `scrcpy` package installs one) changes nothing.
 
-State lives in `~/.local/state/omarchy/costafot.android-dev/`: the selected device, the last package per device, the recent deep links, a package cache. The directory is private to your user and checked on every run; files are written atomically and read through descriptors that refuse symlinks. Settings live on the plugin's entry in your `shell.json` and nowhere else.
+State lives in `~/.local/state/omarchy/costafot.android-dev/`: the selected device, the last package per device, the recent deep links, the recent Wi-Fi addresses, a package cache, and, while a pairing code is up, its PNG (readable by you alone, removed when the session ends). The directory is private to your user and checked on every run; files are written atomically and read through descriptors that refuse symlinks. Settings live on the plugin's entry in your `shell.json` and nowhere else. A pairing code goes to `adb pair` on its stdin, never on a command line where `ps` would show it.
 
-**Leaves your machine:** nothing. `adb` talks to its own server on `127.0.0.1:5037` and to your device; the plugin makes no network request of its own.
+**Leaves your machine:** nothing beyond your own network. `adb` talks to its own server on `127.0.0.1:5037` and to your device, over USB or, for a Wi-Fi device, to the phone's address on your LAN; adb's mDNS discovery is multicast on that LAN. The plugin makes no network request of its own.
 
 ## FAQ
 
@@ -194,7 +208,9 @@ State lives in `~/.local/state/omarchy/costafot.android-dev/`: the selected devi
 
 **Two devices, and it talks to the wrong one.** Enter on the hub's device row opens the picker. The choice is remembered per serial; when the remembered device is gone and one other is attached, that one is used. Over IPC and from a terminal, `select SERIAL` or `--serial SERIAL` does the same.
 
-**No wireless debugging?** Pairing and connecting are not in the plugin: it drives what adb sees over USB and the emulators. A device you connected yourself (`adb connect`) shows up in the picker like any other, tagged Wi-Fi.
+**Which wireless path do I use?** A phone that is plugged in right now: *Go wireless*, then unplug. A phone that is not: *Pair with a QR code* (or with a code when the QR row is missing, which means this adb has no mDNS) once; after that it connects on its own whenever its Wireless debugging is on. A phone paired before whose port changed and that did not come back by itself: *Connect to an address* with what the Wireless debugging screen shows now.
+
+**It paired, but the phone shows offline or disappeared.** Android drops Wireless debugging when the phone leaves the network or sleeps for long, and picks a new port when it is toggled. Toggle it off and on, then *Look again* on the Devices page or `r` on the Wireless page; a paired phone reconnects by itself once its service is back on the network. If nothing on Wi-Fi ever works, check for a VPN on either side that isolates the LAN: with NordVPN's LAN Discovery off, for example, even a ping to the phone gets nothing back.
 
 **Send text refuses my text.** Android's `input text` takes one line of printable ASCII, so accents, emoji and line breaks are refused rather than typed wrong. Apps such as ADBKeyboard accept UTF-8 through a broadcast; that needs an APK on the device and is not built in.
 

@@ -67,7 +67,7 @@ class Cli(FakeAdbCase):
         self.assertEqual(doc["adb"]["source"], "override")
         self.assertEqual(doc["adb_version"], "37.0.1")
         self.assertEqual(doc["selected"], SERIAL)
-        self.assertEqual(set(doc["tools"]), {"scrcpy", "emulator", "terminal", "wl_copy", "wl_paste"})
+        self.assertEqual(set(doc["tools"]), {"scrcpy", "emulator", "terminal", "wl_copy", "wl_paste", "qrencode"})
         self.assertEqual(doc["apk_dir"], os.path.expanduser("~/Downloads"))
         self.assertEqual(doc["state_dir"], self.state_dir)
         self.assertRegex(doc["version"], r"^\d+\.\d+\.\d+$")
@@ -162,7 +162,8 @@ class Cli(FakeAdbCase):
     def test_help_lists_every_command(self):
         doc = self.run_cli("help")
         usages = [c["usage"].split()[0] for c in doc["commands"]]
-        for name in ("status", "devices", "select", "track", "packages", "package", "app", "perms", "deeplink", "screenshot", "record", "toggles", "toggle", "apk", "text", "tools", "tool"):
+        for name in ("status", "devices", "select", "track", "packages", "package", "app", "perms", "deeplink", "screenshot", "record", "toggles", "toggle", "apk", "text", "tools", "tool",
+                     "wireless", "pair", "connect", "disconnect", "tcpip", "usb"):
             self.assertIn(name, usages)
 
     def test_debug_logs_argv_on_stderr_only(self):

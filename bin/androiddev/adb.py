@@ -212,15 +212,18 @@ def _kill(proc):
             pass
 
 
-def run_bounded(argv, timeout=DEFAULT_TIMEOUT, cap=fmt.CAP_DEFAULT, stdin=None):
+def run_bounded(argv, timeout=DEFAULT_TIMEOUT, cap=fmt.CAP_DEFAULT, stdin=None, pdeathsig=False):
     """Run argv with a deadline and a byte cap on stdout (stderr is capped at
     CAP_STDERR). Returns a Result; raises AdbError(timeout|too_much_output)
-    and AdbError(no_adb) when the binary cannot start."""
+    and AdbError(no_adb) when the binary cannot start. `stdin` is a
+    descriptor the child reads (a pairing code, a QR payload: things that
+    must not be on argv); `pdeathsig` gives the child PR_SET_PDEATHSIG for
+    the calls a streaming session makes, so a SIGKILLed helper leaves no
+    `adb pair` behind."""
     started = time.monotonic()
     _debug("run " + " ".join(argv))
     try:
-        proc = subprocess.Popen(argv, stdin=stdin if stdin is not None else subprocess.DEVNULL,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+        proc = subprocess.Popen(argv, stdin=stdin if stdin is not None else subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True, preexec_fn=die_with_parent if pdeathsig else None)
     except OSError as e:
         raise AdbError("no_adb", f"Cannot start {argv[0]}: {e.strerror}") from e
     out = {"data": bytearray(), "truncated": False}
@@ -393,12 +396,12 @@ class Adb:
                         pass
                 os.close(fd)
 
-    def run(self, args, serial=None, timeout=DEFAULT_TIMEOUT, cap=fmt.CAP_DEFAULT, check=True):
+    def run(self, args, serial=None, timeout=DEFAULT_TIMEOUT, cap=fmt.CAP_DEFAULT, check=True, stdin=None, pdeathsig=False):
         argv = [self.path]
         if serial:
             argv += ["-s", serial]
         argv += [str(a) for a in args]
-        result = run_bounded(argv, timeout=timeout, cap=cap)
+        result = run_bounded(argv, timeout=timeout, cap=cap, stdin=stdin, pdeathsig=pdeathsig)
         if check and _failed(result):
             raise classify(result)
         return result

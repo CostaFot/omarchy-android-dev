@@ -5,8 +5,8 @@ import qs.Ui
 
 // Popup for the Android Dev bar widget: the hub is the selected device with
 // the pages hanging off it (Devices, Apps and a package's actions, Deep
-// link, Toggles, Capture, APKs, Send text, Tools, Settings). Pages live
-// on a stack; Escape and Backspace walk back,
+// link, Toggles, Capture, APKs, Send text, Tools, Wireless and its two
+// sub-pages, Settings). Pages live on a stack; Escape and Backspace walk back,
 // Escape on the hub closes. The data is the service's Store
 // (one per shell), reached through `service`; this panel never runs the
 // helper for itself beyond asking the store (or the service, for actions
@@ -37,6 +37,8 @@ Panel {
   // nf-fa-android, as an escape so no tool can strip it silently.
   readonly property string glyph: "\uf17b"
   readonly property var kindGlyphs: ({ emulator: "\uf108", usb: "\uf10b", wifi: "\uf1eb" })
+  // The Wireless page's glyphs (nf-fa qrcode, key, link, times, plug, usb), as escapes.
+  readonly property var wirelessGlyphs: ({ qr: "\uf029", key: "\uf084", link: "\uf0c1", cancel: "\uf00d", plug: "\uf1e6", usb: "\uf287" })
 
   function refresh() {
     if (!store) return
@@ -45,6 +47,7 @@ Panel {
     else if (page === "toggles") store.refreshToggles()
     else if (page === "apks") { resetInstalls(); listApks() }
     else if (page === "tools") store.refreshTools()
+    else if (page === "wireless" || page === "connect" || page === "paircode") store.refreshWireless()
     else store.refreshStatus()
   }
 
@@ -57,15 +60,17 @@ Panel {
   readonly property string page: current.page
   readonly property bool isHub: stack.length === 1
   readonly property bool hasField: page === "packages" || page === "deeplink" || page === "apks" || page === "text"
+    || page === "connect" || page === "paircode"
   // The settings form replaces the row list while it shows.
   readonly property bool isSettingsForm: page === "settings"
 
   readonly property var pageTitles: ({
     hub: "Android Dev", devices: "Devices", packages: "Apps", actions: "", deeplink: "Deep link", toggles: "Toggles",
-    capture: "Capture", apks: "APKs", text: "Send text", tools: "Tools", settings: "Settings"
+    capture: "Capture", apks: "APKs", text: "Send text", tools: "Tools", wireless: "Wireless",
+    connect: "Connect to an address", paircode: "Pair with a code", settings: "Settings"
   })
   // Pages the IPC `page` verb may open straight onto.
-  readonly property var ipcPages: ["hub", "devices", "packages", "deeplink", "toggles", "capture", "apks", "text", "tools", "settings"]
+  readonly property var ipcPages: ["hub", "devices", "packages", "deeplink", "toggles", "capture", "apks", "text", "tools", "wireless", "settings"]
 
   function push(entry) {
     var top = Object.assign({}, current, { cursor: selectedIndex, query: filterField.text })
@@ -110,6 +115,7 @@ Panel {
       else if (entry.page === "toggles") store.refreshToggles()
       else if (entry.page === "apks") { resetInstalls(); listApks() }
       else if (entry.page === "tools") store.refreshTools()
+      else if (entry.page === "wireless" || entry.page === "connect" || entry.page === "paircode") store.refreshWireless()
     }
     if (entry.page === "settings") loadPendingSettings()
     Qt.callLater(function() {
@@ -126,9 +132,10 @@ Panel {
   }
 
   // ---- Rows ---------------------------------------------------------------
-  // Row types: title header sep action note footer. Every string a row
+  // Row types: title header sep action note qr footer. Every string a row
   // shows is either a literal here or a field the helper already formatted;
-  // the one exception is the uninstall question, a literal around a name.
+  // the exceptions are the uninstall and stop questions and the "Pairing
+  // with" note, literals around a name or an address.
   readonly property var rows: {
     var out = []
     if (!isHub) out.push({ type: "title", label: page === "actions" ? (current.pkg || "") : (pageTitles[page] || page) })
@@ -143,6 +150,9 @@ Panel {
     else if (page === "apks") body = apkRows()
     else if (page === "text") body = textRows()
     else if (page === "tools") body = toolRows()
+    else if (page === "wireless") body = wirelessRows()
+    else if (page === "connect") body = connectRows()
+    else if (page === "paircode") body = paircodeRows()
     else body = []  // the settings form paints itself
     for (var i = 0; i < body.length; i++) out.push(body[i])
     var s = root.store
@@ -163,6 +173,7 @@ Panel {
     { icon: "\uf1b2", label: "APKs", detail: "Install from a folder", page: "apks" },
     { icon: "\uf11c", label: "Send text", detail: "Type text or the clipboard on the device", page: "text" },
     { icon: "\uf0ad", label: "Tools", detail: "scrcpy, emulators, logcat", page: "tools" },
+    { icon: kindGlyphs.wifi, label: "Wireless", detail: "Pair and connect over Wi-Fi, go cable-free", page: "wireless" },
     { icon: "\uf013", label: "Settings", detail: "", page: "settings" }
   ]
 
@@ -474,7 +485,7 @@ Panel {
     }
     // What was typed is the first row on these pages; Enter should take it
     // (seen 2026-09-05: the cursor stayed on Send clipboard while typing).
-    if (page === "text" || page === "deeplink")
+    if (page === "text" || page === "deeplink" || page === "connect" || page === "paircode")
       Qt.callLater(function() { root.selectedIndex = root.firstCursorIndex() })
   }
 
@@ -582,9 +593,12 @@ Panel {
     var gate = []
     deviceGate(gate)
     if (ready) {
+      // The transport is a literal keyed on the helper's `kind`: a Wi-Fi
+      // entry mirrors over the network, with no cable in.
+      var transport = dev.kind === "wifi" ? "over Wi-Fi · " : dev.kind === "usb" ? "over USB · " : ""
       if (tools.scrcpy && tools.scrcpy.found)
         out.push({ type: "action", icon: "\uf26c", label: "Mirror with scrcpy",
-                   detail: "scrcpy -s <serial> --window-title \"Android Dev\"" + (t.scrcpy_args ? " " + t.scrcpy_args : ""), action: "scrcpy" })
+                   detail: transport + "scrcpy -s <serial> --window-title \"Android Dev\"" + (t.scrcpy_args ? " " + t.scrcpy_args : ""), action: "scrcpy" })
       else
         out.push({ type: "note", label: "scrcpy not installed", detail: "Install the scrcpy package to mirror the screen from here; this page looks again each time it opens." })
       if (tools.terminal && tools.terminal.found)
@@ -613,6 +627,130 @@ Panel {
     return out
   }
 
+  // ---- Wireless -----------------------------------------------------------
+  // Four ways onto Wi-Fi: a pairing QR code (a helper session the service
+  // runs; the phone scans it from its Wireless debugging screen), the
+  // address and six-digit code from Pair device with pairing code (two
+  // steps through the one field, the code sent on stdin), Connect to an
+  // address, and Go wireless for a plugged phone (adb tcpip 5555). The
+  // lists follow the tracker; the services on the network come from the
+  // helper's `wireless` document.
+  function wirelessRows() {
+    var s = root.store
+    var svc = root.service
+    var out = []
+    if (!s.hasAdb) {
+      out.push({ type: "note", urgent: true, label: "adb not found", detail: noAdbDetail() })
+      return out
+    }
+    var w = s.wirelessInfo
+    if (svc && svc.pairing) {
+      var left = Math.max(0, svc.pairingWindow - svc.pairingSeconds)
+      out.push({ type: "qr", path: svc.pairingQr, label: "Scan it from Developer options › Wireless debugging › Pair device with QR code",
+                 detail: "Only from that screen: a camera app reads it as Wi-Fi credentials · " + left + " s left" })
+      out.push({ type: "action", icon: wirelessGlyphs.cancel, label: "Cancel pairing", detail: "Esc does too", action: "pairstop", urgent: true })
+    } else if (svc && svc.pairerRunning) {
+      out.push({ type: "note", icon: wirelessGlyphs.qr, label: svc.pairingStopping ? "Cancelling…" : "Starting the pairing session…" })
+    } else if (!w) {
+      out.push({ type: "note", label: s.busy && s.runningCommand === "wireless" ? "Looking at the network…" : "Press r to look again" })
+    } else {
+      if (w.mdns && w.mdns.available && w.qrencode && w.qrencode.found)
+        out.push({ type: "action", icon: wirelessGlyphs.qr, label: "Pair with a QR code",
+                   detail: "The phone scans it · Wireless debugging › Pair device with QR code", action: "pairqr" })
+      else if (!w.mdns || !w.mdns.available)
+        out.push({ type: "note", label: "No QR pairing: adb has no mDNS", detail: w.mdns && w.mdns.text ? w.mdns.text : "" })
+      else
+        out.push({ type: "note", label: "No QR pairing: qrencode not installed", detail: "Install the qrencode package (it is in Omarchy's base set), or pair with a code." })
+      out.push({ type: "action", icon: wirelessGlyphs.key, label: "Pair with a code",
+                 detail: "The address and six digits under Wireless debugging › Pair device with pairing code", page: "paircode" })
+      out.push({ type: "action", icon: wirelessGlyphs.link, label: "Connect to an address",
+                 detail: "adb connect ip:port · for a phone paired before", page: "connect" })
+    }
+    out.push({ type: "header", label: "Wi-Fi devices" })
+    var wifi = 0
+    for (var i = 0; i < s.devices.length; i++) {
+      var d = s.devices[i]
+      if (d.kind !== "wifi") continue
+      wifi++
+      out.push({ type: "action", icon: kindGlyphs.wifi, label: d.label || d.serial, detail: (d.detail || "") + " · Enter disconnects",
+                 action: "disconnect", addr: d.serial, urgent: d.state !== "device" })
+      out.push({ type: "action", icon: wirelessGlyphs.usb, label: "Back to USB", detail: "adb usb · for a phone put on Wi-Fi by Go wireless",
+                 action: "usb", serial: d.serial })
+    }
+    if (wifi === 0) out.push({ type: "note", label: "None connected" })
+    if (w && Array.isArray(w.services)) {
+      var seen = false
+      for (var k = 0; k < w.services.length; k++) {
+        var sv = w.services[k]
+        if (sv.kind !== "connect" || sv.attached) continue
+        if (!seen) { out.push({ type: "header", label: "Seen on the network" }); seen = true }
+        out.push({ type: "action", icon: kindGlyphs.wifi, label: sv.instance || sv.address, detail: (sv.detail || "") + " · Enter connects",
+                   action: "connect", addr: sv.address })
+      }
+    }
+    out.push({ type: "header", label: "Plugged phones" })
+    var usb = 0
+    for (var j = 0; j < s.devices.length; j++) {
+      var p = s.devices[j]
+      if (p.kind !== "usb") continue
+      usb++
+      out.push({ type: "action", icon: wirelessGlyphs.plug, label: p.label || p.serial,
+                 detail: p.state === "device" ? "Go wireless · adb tcpip 5555, then connect to its Wi-Fi address; the cable can come out after" : (p.detail || ""),
+                 action: "tcpip", serial: p.serial, urgent: p.state !== "device" })
+    }
+    if (usb === 0) out.push({ type: "note", label: "None plugged in", detail: "Go wireless needs the phone on the cable once; pairing does not." })
+    return out
+  }
+
+  function connectRows() {
+    var s = root.store
+    var out = []
+    if (!s.hasAdb) {
+      out.push({ type: "note", urgent: true, label: "adb not found", detail: noAdbDetail() })
+      return out
+    }
+    if (query !== "") {
+      out.push({ type: "action", icon: wirelessGlyphs.link, label: query, detail: "adb connect · then waits until the device is ready",
+                 action: "connect", addr: query })
+    } else {
+      out.push({ type: "note", label: "Type ip:port, then Enter",
+                 detail: "The address under Wireless debugging; 5555 is used when no port is given. A phone paired before reconnects on its own while its Wireless debugging is on." })
+    }
+    if (s.recentAddresses.length > 0) {
+      out.push({ type: "header", label: "Recent" })
+      for (var i = 0; i < s.recentAddresses.length; i++)
+        out.push({ type: "action", icon: "\uf1da", label: s.recentAddresses[i], detail: "", action: "connect", addr: s.recentAddresses[i] })
+    }
+    return out
+  }
+
+  // Step one takes the pairing address, step two the code; `current.addr`
+  // tells them apart. The code never touches an argv: it goes to the
+  // helper's stdin and from there to adb's.
+  function paircodeRows() {
+    var s = root.store
+    var out = []
+    if (!s.hasAdb) {
+      out.push({ type: "note", urgent: true, label: "adb not found", detail: noAdbDetail() })
+      return out
+    }
+    var addr = current.addr || ""
+    if (addr === "") {
+      if (query !== "")
+        out.push({ type: "action", icon: wirelessGlyphs.link, label: query, detail: "Use this as the pairing address, then type the code", action: "pairaddr", addr: query })
+      else
+        out.push({ type: "note", label: "Type the pairing address, then Enter",
+                   detail: "Wireless debugging › Pair device with pairing code shows an ip:port (not the one on the main screen) and a six-digit code." })
+      return out
+    }
+    // A literal around the address, like "Logcat · PKG".
+    out.push({ type: "note", icon: wirelessGlyphs.key, label: "Pairing with " + addr, detail: "Now the six digits, then Enter" })
+    if (query !== "")
+      out.push({ type: "action", icon: wirelessGlyphs.key, label: query,
+                 detail: /^\d{6}$/.test(query) ? "Enter sends the code to adb pair on stdin" : "Six digits", action: "paircode", addr: addr, code: query })
+    return out
+  }
+
   function keyHint() {
     if (page === "hub") return "j/k move · Enter opens · r refreshes · Esc closes"
     if (page === "devices") return "j/k move · Enter selects · r refreshes · Esc back"
@@ -624,6 +762,9 @@ Panel {
     if (page === "apks") return "Type a folder · ↑/↓ move · Enter installs · r lists again · Esc back"
     if (page === "text") return "Type a line, Enter sends it · ↑/↓ move · Esc back"
     if (page === "tools") return "j/k move · Enter runs it · r reads again · Esc back"
+    if (page === "wireless") return "j/k move · Enter runs it · r looks again · Esc back"
+    if (page === "connect") return "Type ip:port, Enter connects · ↑/↓ recent · Esc back"
+    if (page === "paircode") return "Type the address, Enter, then the code, Enter · Esc back"
     if (page === "settings") return "j/k or Tab move · Enter edits or flips · Enter on Save · Esc cancels"
     return "Esc or Backspace back"
   }
@@ -887,10 +1028,25 @@ Panel {
   // runs the helper and turns the result into a notification as well.
   // `silent` reaches the service: a batch install passes it so the one
   // summary notification is the only one (before 1.0.0 it was dropped here
-  // and Install all sent one per file plus the summary).
-  function act(args, onDone, silent) {
-    if (service && typeof service.act === "function") service.act(args, onDone, silent)
-    else if (store) store.run(args, onDone)
+  // and Install all sent one per file plus the summary). `stdinText` is
+  // what the helper reads on stdin (the pairing code).
+  function act(args, onDone, silent, stdinText) {
+    if (service && typeof service.act === "function") service.act(args, onDone, silent, stdinText)
+    else if (store) store.run(args, onDone, stdinText)
+  }
+
+  // Patch the top stack entry in place (the pairing page keeps its address there).
+  function setCurrent(patch) {
+    stack = stack.slice(0, -1).concat([Object.assign({}, current, patch)])
+  }
+
+  // Pop until `name` is the page (or the hub is reached).
+  function popTo(name) {
+    while (stack.length > 1 && page !== name) {
+      var entry = stack[stack.length - 2]
+      stack = stack.slice(0, -1)
+      if (page === name || stack.length === 1) enterPage(entry)
+    }
   }
 
   function activate(row) {
@@ -898,6 +1054,18 @@ Panel {
     if (row.type === "title") { pop(); return }
     if (row.type !== "action") return
     if (row.action === "refresh") refresh()
+    else if (row.action === "pairqr") { if (service && typeof service.startPairing === "function") service.startPairing() }
+    else if (row.action === "pairstop") { if (service && typeof service.stopPairing === "function") service.stopPairing() }
+    else if (row.action === "pairaddr") { setCurrent({ addr: row.addr }); filterField.text = "" }
+    else if (row.action === "paircode") {
+      if (!/^\d{6}$/.test(row.code)) { if (store) store.showNotice("The pairing code is six digits", true); return }
+      filterField.text = ""
+      act(["pair", "code", row.addr], function(doc) { if (doc && doc.ok !== false && root.page === "paircode") root.popTo("wireless") }, false, row.code + "\n")
+    }
+    else if (row.action === "connect") act(["connect", row.addr], function(doc) { if (doc && doc.ok !== false && root.page === "connect") root.pop() })
+    else if (row.action === "disconnect") act(["disconnect", row.addr])
+    else if (row.action === "tcpip") act(["tcpip", row.serial])
+    else if (row.action === "usb") act(["usb", row.serial])
     else if (row.action === "select") { if (store) store.selectDevice(row.serial); pop() }
     else if (row.action === "package") push({ page: "actions", pkg: row.pkg })
     else if (row.action === "deeplink") act(["deeplink", row.url].concat(row.pkg ? [row.pkg] : []))
@@ -969,7 +1137,18 @@ Panel {
   // its snapshot first), a started one joins it when it boots.
   Connections {
     target: root.store
-    function onDevicesChanged() { if (root.opened && root.page === "tools") root.store.refreshTools() }
+    function onDevicesChanged() {
+      if (!root.opened) return
+      if (root.page === "tools") root.store.refreshTools()
+      // A Wi-Fi entry joining or dropping repaints the lists and re-reads the services.
+      else if (root.page === "wireless") root.store.refreshWireless()
+    }
+  }
+
+  // A pairing session ending (paired, cancelled, failed) re-reads the page.
+  Connections {
+    target: root.service
+    function onPairingChanged() { if (root.opened && root.page === "wireless" && !root.service.pairing) root.store.refreshWireless() }
   }
 
   onOpenedChanged: {
@@ -1058,6 +1237,8 @@ Panel {
           placeholderText: root.page === "deeplink" ? "URL or deep link, then Enter"
             : root.page === "apks" ? "Folder with .apk files"
             : root.page === "text" ? "Text to type on the device, then Enter"
+            : root.page === "connect" ? "ip:port, then Enter"
+            : root.page === "paircode" ? (root.current.addr ? "The six-digit pairing code, then Enter" : "Pairing address ip:port, then Enter")
             : "Filter packages"
 
           Keys.onPressed: function(event) {
@@ -1124,6 +1305,7 @@ Panel {
                   : kind === "header" ? headerLabel.implicitHeight + Style.space(8)
                   : kind === "title" ? Style.space(30)
                   : kind === "note" ? noteColumn.implicitHeight + Style.space(12)
+                  : kind === "qr" ? qrColumn.implicitHeight + Style.space(16)
                   : kind === "footer" ? footerLabel.implicitHeight + Style.space(8)
                   : twoLine ? Style.space(44) : Style.space(32)
 
@@ -1212,6 +1394,60 @@ Panel {
                     font.family: root.contentFontFamily
                     font.pixelSize: Style.font.caption
                     wrapMode: Text.Wrap
+                  }
+                }
+
+                // The pairing code: the PNG the helper wrote (0600, in the
+                // state dir, gone when the session ends) on a white card, the
+                // instruction under it. Re-read every time (`cache: false`):
+                // the path repeats across sessions of one helper pid.
+                Column {
+                  id: qrColumn
+                  visible: rowItem.kind === "qr"
+                  width: parent.width - Style.space(16)
+                  x: Style.space(8)
+                  spacing: Style.space(6)
+                  anchors.verticalCenter: parent.verticalCenter
+
+                  Rectangle {
+                    width: Style.space(200)
+                    height: width
+                    radius: Style.cornerRadius
+                    color: "white"
+                    anchors.horizontalCenter: parent.horizontalCenter
+
+                    Image {
+                      anchors.fill: parent
+                      anchors.margins: Style.space(6)
+                      source: rowItem.kind === "qr" && rowItem.modelData.path ? Util.fileUrl(String(rowItem.modelData.path)) : ""
+                      cache: false
+                      asynchronous: false
+                      smooth: false
+                      fillMode: Image.PreserveAspectFit
+                    }
+                  }
+
+                  Text {
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    text: rowItem.kind === "qr" ? (rowItem.modelData.label || "") : ""
+                    color: root.contentForeground
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.body
+                    wrapMode: Text.Wrap
+                    horizontalAlignment: Text.AlignHCenter
+                  }
+
+                  Text {
+                    visible: rowItem.kind === "qr" && !!rowItem.modelData.detail
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    text: rowItem.kind === "qr" ? (rowItem.modelData.detail || "") : ""
+                    color: root.urgentForeground
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.caption
+                    wrapMode: Text.Wrap
+                    horizontalAlignment: Text.AlignHCenter
                   }
                 }
 

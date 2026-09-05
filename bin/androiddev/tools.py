@@ -15,7 +15,7 @@ the same binary and server as everything else here: the `scrcpy` package
 depends on `android-tools`, which puts a second adb on PATH, and scrcpy
 would otherwise pick that one.
 
-Test knobs: OMARCHY_ANDROID_DEV_SCRCPY / _EMULATOR / _TERMINAL name the
+Test knobs: OMARCHY_ANDROID_DEV_SCRCPY / _EMULATOR / _TERMINAL / _QRENCODE name the
 binaries (a non-executable value means "not installed"), and
 OMARCHY_ANDROID_DEV_LAUNCHER replaces `uwsm-app` (an empty value runs the
 tool directly).
@@ -70,6 +70,12 @@ def terminal_path():
     return _override("OMARCHY_ANDROID_DEV_TERMINAL", lambda: shutil.which("xdg-terminal-exec"))
 
 
+def qrencode_path():
+    """`qrencode` draws the Wi-Fi pairing code (wireless.py); it is in
+    Omarchy's base package set."""
+    return _override("OMARCHY_ANDROID_DEV_QRENCODE", lambda: shutil.which("qrencode"))
+
+
 def launcher_path():
     """`uwsm-app`, Omarchy's way of giving a launched app its own scope;
     None runs the tool directly."""
@@ -91,6 +97,7 @@ def find_all(adb_path=None):
         "terminal": tool(terminal_path()),
         "wl_copy": tool(notify.wl_copy_path()),
         "wl_paste": tool(notify.wl_paste_path()),
+        "qrencode": tool(qrencode_path()),
     }
 
 

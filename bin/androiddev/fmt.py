@@ -17,8 +17,11 @@ MAX_PERMISSIONS = 512
 MAX_AVDS = 64
 MAX_APKS = 200
 MAX_RECENT_DEEPLINKS = 10
+MAX_RECENT_ADDRESSES = 10
+MAX_MDNS_SERVICES = 32
 
 CAP_DEFAULT = 256 * 1024          # adb stdout, most commands
+CAP_QR_PNG = 1024 * 1024          # qrencode's PNG on stdout
 CAP_PACKAGES = 1024 * 1024        # pm list packages, dumpsys package PKG
 CAP_SCREENCAP = 20 * 1024 * 1024  # exec-out screencap -p
 CAP_STDERR = 64 * 1024
@@ -106,6 +109,52 @@ def device_detail(kind, state):
 def avd_detail(serial):
     """`Running · emulator-5554` or `Stopped`: the Tools page's line under an AVD."""
     return f"Running · {clean(serial)}" if serial else "Stopped"
+
+
+# ---- wireless debugging --------------------------------------------------------
+
+MDNS_MISSING_TEXT = ("This adb has no mDNS (the android-tools one does not): pair with a code or connect to an address instead, "
+                     "or point adbPath at the SDK platform-tools adb")
+QR_SCAN_TEXT = "Scan it from Developer options › Wireless debugging › Pair device with QR code"
+QR_WARNING_TEXT = "Only from that screen: a camera app reads this code as Wi-Fi credentials and can knock the phone off its network"
+SERVICE_TEXT = {"pairing": "Pairing", "connect": "Wireless debugging"}
+
+
+def service_detail(kind, address):
+    """`Pairing · 192.168.1.5:37123` / `Wireless debugging · 192.168.1.5:41235`:
+    the line under an mDNS service on the Wireless page."""
+    return f"{SERVICE_TEXT.get(kind, clean(kind))} · {clean(address)}"
+
+
+def connected_notice(address):
+    return f"Connected over Wi-Fi: {clean(address)}"
+
+
+def disconnected_notice(address):
+    return f"Disconnected: {clean(address)}"
+
+
+def paired_notice(label):
+    return f"Paired with {clean(label)}"
+
+
+def go_wireless_notice(address):
+    return f"Now over Wi-Fi: {clean(address)} · the cable can come out"
+
+
+def usb_notice(label):
+    return f"Back to USB: {clean(label)}"
+
+
+def window_text(seconds):
+    """`2 minutes`, `90 seconds`: how long a pairing code is shown."""
+    try:
+        s = max(0, int(seconds))
+    except (TypeError, ValueError):
+        return "a while"
+    if s >= 120 and s % 60 == 0:
+        return f"{s // 60} minutes"
+    return f"{s} seconds"
 
 
 ADB_SOURCES = {

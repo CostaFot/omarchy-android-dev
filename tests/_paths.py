@@ -34,16 +34,22 @@ with open(os.environ["RECORDER_LOG"], "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "stdin": sys.stdin.buffer.read(64).hex() if not sys.stdin.isatty() else ""}) + "\\n")
 """
 
-# A fake scrcpy / emulator / terminal / wl-paste: logs its argv to RECORDER_LOG
-# under `tool`, answers from a rule list [match, stdout, code, sleep] baked in.
+# A fake scrcpy / emulator / terminal / wl-paste / qrencode: logs its argv (and
+# what arrived on stdin, as hex) to RECORDER_LOG under `tool`, answers from a
+# rule list [match, stdout, code, sleep] baked in; a stdout starting `hex:`
+# is written as those bytes (a PNG).
 FAKE_TOOL = """#!/usr/bin/python3
 import json, os, sys, time
 argv = sys.argv[1:]
+data = b"" if sys.stdin.isatty() else sys.stdin.buffer.read(4096)
 with open({log!r}, "a") as f:
-    f.write(json.dumps({{"tool": {name!r}, "argv": argv}}) + "\\n")
+    f.write(json.dumps({{"tool": {name!r}, "argv": argv, "stdin": data.hex()}}) + "\\n")
 for match, stdout, code, sleep in {rules!r}:
     if match is None or match in " ".join(argv):
-        sys.stdout.write(stdout)
+        if stdout.startswith("hex:"):
+            sys.stdout.buffer.write(bytes.fromhex(stdout[4:]))
+        else:
+            sys.stdout.write(stdout)
         sys.stdout.flush()
         if sleep:
             time.sleep(sleep)
@@ -90,10 +96,11 @@ class FakeAdbCase(unittest.TestCase):
             "OMARCHY_ANDROID_DEV_EMULATOR": "/nonexistent",
             "OMARCHY_ANDROID_DEV_TERMINAL": "/nonexistent",
             "OMARCHY_ANDROID_DEV_WL_PASTE": "/nonexistent",
+            "OMARCHY_ANDROID_DEV_QRENCODE": "/nonexistent",
             "OMARCHY_ANDROID_DEV_LAUNCHER": "",
         }
         cleared = ["ANDROID_HOME", "ANDROID_SDK_ROOT", "OMARCHY_ANDROID_DEV_DEBUG", "OMARCHY_ANDROID_DEV_TOTAL_BUDGET",
-                   "XDG_PICTURES_DIR", "XDG_VIDEOS_DIR"]
+                   "OMARCHY_ANDROID_DEV_PAIR_SECONDS", "XDG_PICTURES_DIR", "XDG_VIDEOS_DIR"]
         self._saved = {k: os.environ.get(k) for k in list(self.env) + cleared}
         for k in cleared:
             os.environ.pop(k, None)
@@ -157,11 +164,13 @@ class FakeAdbCase(unittest.TestCase):
         except FileNotFoundError:
             return []
 
-    def run_cli(self, *args, env=None, timeout=30):
-        """bin/omarchy-android-dev as a subprocess, exactly as QML runs it."""
+    def run_cli(self, *args, env=None, timeout=30, input=None):
+        """bin/omarchy-android-dev as a subprocess, exactly as QML runs it.
+        `input` is what the helper reads on stdin (a pairing code)."""
         full = dict(os.environ)
         full.update(env or {})
-        proc = subprocess.run([sys.executable, HELPER, *args], capture_output=True, text=True, env=full, timeout=timeout)
+        proc = subprocess.run([sys.executable, HELPER, *args], capture_output=True, text=True, env=full, timeout=timeout,
+                              input=input if input is not None else "")
         self.assertEqual(proc.returncode, 0, proc.stderr)
         lines = proc.stdout.splitlines()
         self.assertEqual(len(lines), 1, proc.stdout)

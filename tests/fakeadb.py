@@ -4,13 +4,15 @@
 OMARCHY_ANDROID_DEV_FAKE_SCRIPT names a JSON file: a list of rules, each
 `{"match": "substring of the argv", "stdout": "...", "stdout_file":
 "fixture name", "stdout_hex": "hex bytes", "bytes": N, "stderr": "...", "code": 0, "sleep": s,
-"sleep_after": s, "file_arg": i, "file_hex": "hex bytes"}`. `file_arg` names the argv
+"sleep_after": s, "file_arg": i, "file_hex": "hex bytes", "stdin": true}`. `file_arg` names the argv
 index of a host path to write `file_hex` to (what `adb pull DST` does). The first rule whose `match` is a substring of the
 space-joined argv answers; a rule without `match` answers everything.
 No matching rule: exit 1 with a message on stderr.
 
 Every call is appended to OMARCHY_ANDROID_DEV_FAKE_LOG as one JSON line
 (the argv), so tests can assert the exact arguments, `-s SERIAL` included.
+A rule with `stdin: true` reads one line from stdin first (what `adb pair`
+does with the code) and logs it as a last element `<stdin>LINE`.
 """
 
 import json
@@ -21,12 +23,15 @@ import time
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 
 
-def main():
-    argv = sys.argv[1:]
+def log_call(argv):
     log = os.environ.get("OMARCHY_ANDROID_DEV_FAKE_LOG")
     if log:
         with open(log, "a", encoding="utf-8") as f:
             f.write(json.dumps(argv) + "\n")
+
+
+def main():
+    argv = sys.argv[1:]
     rules = []
     script = os.environ.get("OMARCHY_ANDROID_DEV_FAKE_SCRIPT")
     if script:
@@ -37,6 +42,13 @@ def main():
         match = rule.get("match")
         if match is not None and match not in joined:
             continue
+        if rule.get("stdin"):
+            # What `adb pair` does: one line from stdin (the code). Logged as
+            # a marked extra element so a test can pin "on stdin, not argv".
+            line = sys.stdin.buffer.readline(64).decode("utf-8", errors="replace").strip()
+            log_call(argv + ["<stdin>" + line])
+        else:
+            log_call(argv)
         if rule.get("sleep"):
             time.sleep(float(rule["sleep"]))
         out = sys.stdout.buffer
@@ -63,6 +75,7 @@ def main():
         if rule.get("sleep_after"):
             time.sleep(float(rule["sleep_after"]))
         return int(rule.get("code", 0))
+    log_call(argv)
     sys.stderr.write(f"fake adb: no rule for: {joined}\n")
     return 1
 

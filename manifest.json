@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "costafot.android-dev",
   "name": "Android Dev",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "CostaFot",
   "license": "MIT",
-  "description": "The Android developer's side of a device, on the bar: adb devices, packages and their actions, developer toggles, screenshots, deep links, APKs, the emulator, scrcpy and logcat.",
+  "description": "The Android developer's side of a device, on the bar: adb devices, packages and their actions, developer toggles, screenshots, deep links, APKs, the emulator, scrcpy and logcat, wireless debugging.",
   "kinds": [
     "service",
     "bar-widget"

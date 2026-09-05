@@ -130,6 +130,7 @@ def write_json(path, data):
 
 
 _SAFE = re.compile(r"[^A-Za-z0-9._-]")
+_ADDRESS = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,252}:\d{1,5}$")  # what wireless.valid_address produces
 
 
 def file_token(serial):
@@ -139,8 +140,9 @@ def file_token(serial):
 
 class State:
     """state.json (selected serial, last package per serial, recent deep
-    links) and packages-<serial>.json (the last package list). Loaded
-    lazily, written only by save() when something changed."""
+    links, recent Wi-Fi addresses) and packages-<serial>.json (the last
+    package list). Loaded lazily, written only by save() when something
+    changed."""
 
     def __init__(self):
         self.dir = None
@@ -161,7 +163,7 @@ class State:
     def _load(self):
         if self._doc is not None:
             return self._doc
-        self._doc = {"selected": None, "last_package": {}, "recent_deeplinks": []}
+        self._doc = {"selected": None, "last_package": {}, "recent_deeplinks": [], "recent_addresses": []}
         if not self.dir:
             return self._doc
         data, problem = read_json(self._path("state.json"), default={})
@@ -174,6 +176,10 @@ class State:
                 self._doc["last_package"] = {fmt.clean(k): fmt.clean(v) for k, v in data["last_package"].items() if isinstance(v, str)}
             if isinstance(data.get("recent_deeplinks"), list):
                 self._doc["recent_deeplinks"] = [fmt.clean(u, 2048) for u in data["recent_deeplinks"] if isinstance(u, str)][:fmt.MAX_RECENT_DEEPLINKS]
+            if isinstance(data.get("recent_addresses"), list):
+                # Only what `adb connect` would take (host:port); anything else in the file is dropped.
+                addresses = [fmt.clean(a) for a in data["recent_addresses"] if isinstance(a, str)]
+                self._doc["recent_addresses"] = [a for a in addresses if _ADDRESS.match(a)][:fmt.MAX_RECENT_ADDRESSES]
         return self._doc
 
     def reload(self):
@@ -212,11 +218,49 @@ class State:
         doc["recent_deeplinks"] = recent[:fmt.MAX_RECENT_DEEPLINKS]
         self._dirty = True
 
+    @property
+    def recent_addresses(self):
+        return list(self._load()["recent_addresses"])
+
+    def add_recent_address(self, address):
+        doc = self._load()
+        recent = [a for a in doc["recent_addresses"] if a != address]
+        recent.insert(0, address)
+        doc["recent_addresses"] = recent[:fmt.MAX_RECENT_ADDRESSES]
+        self._dirty = True
+
     def save(self):
         if not self._dirty or not self.dir:
             return
         write_json(self._path("state.json"), self._load())
         self._dirty = False
+
+    # -- pairing-<pid>.png --------------------------------------------------
+
+    def pairing_png_path(self):
+        """Where a `pair qr` session writes its code: a 0600 file in the
+        private dir, named after the helper's pid, removed when the session
+        ends. None when the dir is unusable."""
+        return self._path(f"pairing-{os.getpid()}.png")
+
+    def sweep_pairing_files(self):
+        """Remove the codes earlier sessions left behind (a SIGKILLed helper
+        cannot remove its own). Returns how many went."""
+        if not self.dir:
+            return 0
+        gone = 0
+        try:
+            names = os.listdir(self.dir)
+        except OSError:
+            return 0
+        for name in names:
+            if name.startswith("pairing-") and name.endswith(".png"):
+                try:
+                    os.unlink(os.path.join(self.dir, name))
+                    gone += 1
+                except OSError:
+                    pass
+        return gone
 
     # -- packages-<serial>.json -------------------------------------------
 

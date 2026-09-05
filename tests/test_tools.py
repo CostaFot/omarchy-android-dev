@@ -24,7 +24,7 @@ class Describe(FakeAdbCase):
         doc = self.run_cli("tools")
         self.assertTrue(doc["ok"])
         self.assertEqual({k: v["found"] for k, v in doc["tools"].items()},
-                         {"scrcpy": False, "emulator": False, "terminal": False, "wl_copy": True, "wl_paste": False})  # wl-copy is the recorder
+                         {"scrcpy": False, "emulator": False, "terminal": False, "wl_copy": True, "wl_paste": False, "qrencode": False})  # wl-copy is the recorder
         self.assertEqual(doc["avds"], [])
         self.assertEqual(doc["selected"], SERIAL)
 

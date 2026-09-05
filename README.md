@@ -78,7 +78,7 @@ Emulators show up by their AVD name, as in `Pixel 10 Pro Fold (emulator-5554)`.
 
 ## How it runs
 
-The plugin never runs `adb` from the shell. A Python 3 helper with no dependencies does, as `/usr/bin/python3` with an argument list, `-s SERIAL` on every device command, a deadline and a size cap on every call. State lives in `~/.local/state/omarchy/costafot.android-dev/`, private to your user. Nothing leaves your machine: `adb` talks to its own server on `127.0.0.1` and to your device. scrcpy, the emulator and the logcat terminal are started detached, the way Omarchy's own launchers start apps, and are never signalled by the plugin; an emulator stops through `adb emu kill`.
+The plugin never runs `adb` from the shell. A Python 3 helper with no dependencies does, as `/usr/bin/python3` with an argument list, `-s SERIAL` on every device command, a deadline and a size cap on every call. State lives in `~/.local/state/omarchy/costafot.android-dev/`, private to your user. Nothing leaves your machine: `adb` talks to its own server on `127.0.0.1` and to your device. scrcpy, the emulator and the logcat terminal are started detached, the way Omarchy's own launchers start apps, and are never signalled by the plugin; an emulator stops through `adb emu kill`. scrcpy is told to use the same `adb` as the plugin, so a second adb on PATH (the `scrcpy` package installs one) changes nothing.
 
 ## Uninstall
 

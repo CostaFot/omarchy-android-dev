@@ -10,6 +10,11 @@ which the emulator handles itself; scrcpy and the terminal are closed by
 the user. The helper only waits half a second to catch a tool that fails
 at once.
 
+scrcpy runs with `ADB` set to the adb the helper resolved, so it talks to
+the same binary and server as everything else here: the `scrcpy` package
+depends on `android-tools`, which puts a second adb on PATH, and scrcpy
+would otherwise pick that one.
+
 Test knobs: OMARCHY_ANDROID_DEV_SCRCPY / _EMULATOR / _TERMINAL name the
 binaries (a non-executable value means "not installed"), and
 OMARCHY_ANDROID_DEV_LAUNCHER replaces `uwsm-app` (an empty value runs the
@@ -157,16 +162,17 @@ def _reset_signals():
         pass
 
 
-def launch(argv, name):
+def launch(argv, name, env=None):
     """Start argv detached and make sure it survived its first moments.
-    Returns nothing; raises AdbError(no_tool) when it could not start or
-    exited at once."""
+    `env` adds variables to the tool's environment. Returns nothing; raises
+    AdbError(no_tool) when it could not start or exited at once."""
     launcher = launcher_path()
     full = ([launcher, "--"] if launcher else []) + list(argv)
     _debug("launch " + " ".join(full))
+    environ = dict(os.environ, **env) if env else None
     try:
         proc = subprocess.Popen(full, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                close_fds=True, start_new_session=True, preexec_fn=_reset_signals)
+                                close_fds=True, start_new_session=True, preexec_fn=_reset_signals, env=environ)
     except OSError as e:
         raise AdbError("no_tool", f"Cannot start {name}: {e.strerror}") from e
     try:
@@ -177,13 +183,13 @@ def launch(argv, name):
         raise AdbError("no_tool", f"{name} exited at once (code {proc.returncode})")
 
 
-def scrcpy(serial, settings, label=None):
+def scrcpy(serial, settings, label=None, adb_path=None):
     path = scrcpy_path()
     if not path:
         raise AdbError("no_tool", "scrcpy is not installed")
     extra = str(settings.get("scrcpyArgs") or "").split()
     argv = [path, "-s", serial, "--window-title", APP_NAME] + extra
-    launch(argv, "scrcpy")
+    launch(argv, "scrcpy", env={"ADB": adb_path} if adb_path else None)
     return {"notice": f"scrcpy started: {label or serial}", "argv": argv[1:]}
 
 

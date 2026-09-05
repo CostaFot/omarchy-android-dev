@@ -427,7 +427,7 @@ def cmd_tool(ctx, args):
         if len(args) != 1:
             raise BadArgs(usage)
         adb, serial = ctx.device()
-        return toolsmod.scrcpy(serial, ctx.settings, _device_label(ctx, serial))
+        return toolsmod.scrcpy(serial, ctx.settings, _device_label(ctx, serial), adb.path)
     if sub == "avd":
         if len(args) != 2 or not toolsmod.AVD_RE.match(args[1]):
             raise BadArgs("tool avd NAME")

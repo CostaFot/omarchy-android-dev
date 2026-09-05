@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- scrcpy is launched with `ADB` set to the adb the plugin resolved (the SDK's platform-tools by default), so it talks to the same binary and server as everything else. The `scrcpy` package pulls in `android-tools` and its own `/usr/bin/adb`, which scrcpy would otherwise pick off PATH; a client of another protocol version restarts the adb server under the device tracker. Checked live: the Mirror row appeared on the Tools page without a restart once scrcpy was installed, the window opened in its own scope, and its adb child was the SDK one. 127 offline tests.
+
 ## 0.5.0
 
 - **APKs**: a folder box prefilled from the `apkDir` setting lists the `.apk` files in it as you type; Enter on one installs it (`adb install -r -t`, so a debug build marked testOnly installs too) and the row says Installed or quotes adb's `Failure [...]`; **Install all** runs the files one after another, each its own helper run, with one summary notification.

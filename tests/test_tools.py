@@ -135,6 +135,16 @@ class Launches(FakeAdbCase):
         calls = self.tool_calls("scrcpy", wait=2)
         self.assertEqual(calls, [["/dev/null", "/dev/null"]])
 
+    def test_scrcpy_is_pointed_at_the_helpers_adb(self):
+        """The scrcpy package pulls in android-tools and its /usr/bin/adb;
+        scrcpy must use the adb the helper resolved, through its ADB variable."""
+        script = self.fake_tool("scrcpy", [(None, "", 0, 0)], "OMARCHY_ANDROID_DEV_SCRCPY")
+        with open(script, "w", encoding="utf-8") as f:
+            f.write("#!/usr/bin/python3\nimport json, os\n"
+                    f"open({self.recorder_log!r}, 'a').write(json.dumps({{'tool': 'scrcpy', 'argv': [os.environ.get('ADB')]}}) + '\\n')\n")
+        self.run_cli("tool", "scrcpy")
+        self.assertEqual(self.tool_calls("scrcpy", wait=2), [[os.environ["OMARCHY_ANDROID_DEV_PATH"]]])
+
 
 if __name__ == "__main__":
     unittest.main()

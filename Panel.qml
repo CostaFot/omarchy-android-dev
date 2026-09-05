@@ -1299,6 +1299,7 @@ Panel {
         anchors.rightMargin: Style.space(8)
         contentWidth: width
         contentHeight: settingsForm.implicitHeight
+        clip: true
         boundsBehavior: Flickable.StopAtBounds
         interactive: contentHeight > height
 

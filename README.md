@@ -144,12 +144,14 @@ To put the panel on the Omarchy menu (`SUPER + SPACE`), add a row to `~/.config/
 "trigger.capture.android": {"icon":"","label":"Android screenshot","action":"omarchy-shell costafot.android-dev screenshot"},
 ```
 
-The emulator and scrcpy open as tiled windows, which is rarely what a phone-shaped window wants. Two rules in `~/.config/hypr/hyprland.lua` (after the `require` lines) float and centre them; the emulator's window class is `Emulator` and scrcpy is launched with the window title `Android Dev`:
+The emulator and scrcpy open as tiled windows, which is rarely what a phone-shaped window wants: tiled, the emulator keeps the phone's proportions and pads the rest of the tile grey, with its toolbar floating loose over it. Two rules in `~/.config/hypr/hyprland.lua` (after the `require` lines) float them; the emulator's window class is `Emulator` and scrcpy is launched with the window title `Android Dev`:
 
 ```lua
-o.window("^(Emulator)$", { float = true, center = true })
+o.window("^(Emulator)$", { float = true })
 o.window({ class = "^(scrcpy)$", title = "^(Android Dev)$" }, { float = true, center = true })
 ```
+
+Floated, the emulator takes its phone shape with the toolbar attached to its right edge, and it reopens where you last dragged it (it remembers its own position, so `center` would do nothing for it). scrcpy opens centred.
 
 ## From a terminal
 
@@ -196,6 +198,8 @@ State lives in `~/.local/state/omarchy/costafot.android-dev/`: the selected devi
 **Send text refuses my text.** Android's `input text` takes one line of printable ASCII, so accents, emoji and line breaks are refused rather than typed wrong. Apps such as ADBKeyboard accept UTF-8 through a broadcast; that needs an APK on the device and is not built in.
 
 **Typing and taps do nothing on my phone.** Some vendor ROMs block input injection over adb until *USB debugging (Security settings)* is enabled in the developer options. For scrcpy the usual answer is `--keyboard=uhid --mouse=uhid`, which go in the *Extra scrcpy arguments* setting.
+
+**The emulator window looks wrong.** The emulator is an X11 program under XWayland (its bundled Qt has no Wayland plugin), and its toolbar is a second window: the two only line up when the main window floats, which the rule above does. On a scaled monitor it renders at 1x and comes out small; it ignores `QT_SCALE_FACTOR`, so resize the window and the screen scales with it.
 
 **A recording was running when the shell restarted.** The device finishes the file on its own; it stays at `/sdcard/omarchy-android-dev-<stamp>.mp4` and the plugin does not pull leftovers. `adb pull` it and remove it by hand.
 

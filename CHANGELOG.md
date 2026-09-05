@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- README: the emulator's window rule is `float` alone and the text says what happens (the emulator is an X11 window with a detached toolbar; tiled, it pads the tile grey with the toolbar loose over it; floated, it takes its phone shape with the toolbar attached and reopens where it was last dragged, so `center` does nothing for it; scrcpy keeps `center`). A FAQ entry says why the window looks wrong without the rule and why it comes out small on a scaled monitor. Verified live with rules added through `hyprctl eval`.
+
 ## 1.0.0
 
 - **Release.** The README has a preview and a screenshot per page, the FAQ (adb off PATH, an unauthorised device, two devices, no wireless pairing, ASCII-only text, vendor ROMs that block input injection, a recording cut by a shell restart, what differs from the Windows extension), Hyprland window rules that float the emulator and scrcpy, and the update line. `preview.png` and `assets/screenshots/` are captured from the panel on the Medium_Phone emulator.

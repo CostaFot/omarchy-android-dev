@@ -730,6 +730,7 @@ Panel {
   function ensureFormCursorVisible() {
     var item = formControls[formCursor]
     if (!item) return
+    if (formFields.indexOf(item) === -1 && formToggles.indexOf(item) === -1) return   // the footer's buttons
     var top = item.mapToItem(settingsForm, 0, 0).y
     var bottom = top + item.height
     if (top < settingsScroll.contentY) settingsScroll.contentY = top
@@ -987,7 +988,7 @@ Panel {
     focusTarget: root.hasField ? filterField : keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(380))
     contentHeight: panel.fittedContentHeight(
-      root.isSettingsForm ? settingsForm.implicitHeight + Style.space(12)
+      root.isSettingsForm ? settingsForm.implicitHeight + settingsFooter.implicitHeight + Style.space(20)
       : contentColumn.implicitHeight + (root.hasField ? filterField.height + Style.space(6) : 0), Style.space(760))
 
     // Unhandled keys from the catcher (it never accepts Backspace, and
@@ -1294,7 +1295,10 @@ Panel {
       Flickable {
         id: settingsScroll
         visible: root.isSettingsForm
-        anchors.fill: parent
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: settingsFooter.top
         anchors.leftMargin: Style.space(8)
         anchors.rightMargin: Style.space(8)
         contentWidth: width
@@ -1457,43 +1461,59 @@ Panel {
             onHovered: function(on) { if (on) root.formCursor = 8 }
             onClicked: { root.formCursor = 8; root.pendingShowSystemApps = !root.pendingShowSystemApps }
           }
+        }
+      }
 
-          Item { width: 1; height: Style.space(2) }
+      // Save, Cancel and the key hint stay put under the scrolling form,
+      // so a long form never hides the buttons.
+      Column {
+        id: settingsFooter
+        visible: root.isSettingsForm
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: Style.space(8)
+        anchors.rightMargin: Style.space(8)
+        spacing: Style.space(8)
 
-          Row {
-            spacing: Style.space(8)
+        PanelSeparator {
+          width: parent.width
+          foreground: root.contentForeground
+        }
 
-            Button {
-              id: saveButton
-              text: "Save"
-              bordered: true
-              foreground: root.contentForeground
-              fontFamily: root.contentFontFamily
-              hasCursor: root.formCursor === 9
-              onHovered: function(on) { if (on) root.formCursor = 9 }
-              onClicked: root.saveSettings()
-            }
+        Row {
+          spacing: Style.space(8)
 
-            Button {
-              id: cancelButton
-              text: "Cancel"
-              foreground: root.mutedForeground
-              fontFamily: root.contentFontFamily
-              hasCursor: root.formCursor === 10
-              onHovered: function(on) { if (on) root.formCursor = 10 }
-              onClicked: root.pop()
-            }
+          Button {
+            id: saveButton
+            text: "Save"
+            bordered: true
+            foreground: root.contentForeground
+            fontFamily: root.contentFontFamily
+            hasCursor: root.formCursor === 9
+            onHovered: function(on) { if (on) root.formCursor = 9 }
+            onClicked: root.saveSettings()
           }
 
-          Text {
-            width: parent.width
-            textFormat: Text.PlainText
-            text: root.keyHint()
-            color: root.mutedForeground
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.caption
-            wrapMode: Text.Wrap
+          Button {
+            id: cancelButton
+            text: "Cancel"
+            foreground: root.mutedForeground
+            fontFamily: root.contentFontFamily
+            hasCursor: root.formCursor === 10
+            onHovered: function(on) { if (on) root.formCursor = 10 }
+            onClicked: root.pop()
           }
+        }
+
+        Text {
+          width: parent.width
+          textFormat: Text.PlainText
+          text: root.keyHint()
+          color: root.mutedForeground
+          font.family: root.contentFontFamily
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
         }
       }
 

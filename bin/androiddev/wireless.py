@@ -96,6 +96,15 @@ def check_address(text):
     raise AdbError("bad_args", "Enter an address as ip:port (5555 is used when there is no port)")
 
 
+def check_target(text):
+    """What `disconnect` takes: an address (normalised), or the mDNS-named
+    serial adb gave a phone it connected to on its own (as is)."""
+    s = str(text or "").strip()
+    if devmod.valid_serial(s) and devmod.mdns_instance(s):
+        return s
+    return check_address(s)
+
+
 def valid_code(text):
     s = str(text or "").strip()
     return s if CODE_RE.match(s) else None
@@ -306,13 +315,24 @@ def new_wifi_device(adb, before, budget=NEW_DEVICE_WAIT):
 
 def attached_wifi_device(adb, host):
     """A ready Wi-Fi entry on `host` that is already in the list (a phone
-    paired again while connected), or None."""
+    paired again while connected), or None. An `ip:port` serial carries its
+    host; an mDNS-named one is on the host its connect service advertises
+    (one `mdns services` call, made only when such an entry is ready)."""
     try:
         devices = devmod.list_devices(adb)
     except AdbError:
         return None
-    for d in devices:
-        if d["kind"] == "wifi" and d["state"] == "device" and d["serial"].rpartition(":")[0] == host:
+    ready = [d for d in devices if d["kind"] == "wifi" and d["state"] == "device"]
+    named = None
+    for d in ready:
+        instance = devmod.mdns_instance(d["serial"])
+        if instance is None:
+            if d["serial"].rpartition(":")[0] == host:
+                return d
+            continue
+        if named is None:
+            named = {s["instance"]: s["host"] for s in services(adb) if s["kind"] == "connect"}
+        if named.get(instance) == host:
             return d
     return None
 
@@ -372,6 +392,22 @@ def write_qr_png(payload, path):
         raise AdbError("internal", f"Cannot write {path}: {e.strerror}") from e
 
 
+def arm_cancel():
+    """The QR session's cancel: SIGINT or SIGTERM raise `Cancelled`, and this
+    helper dies with its parent. `dispatch` calls it before the adb server
+    check and the device list, not just `pair_qr`: the shell starts the
+    helper with SIGINT ignored, so until a handler is in place a `pair
+    stop` in the first moments was simply dropped and the session went on
+    (found in the 1.2.0 review). Idempotent."""
+    die_with_parent()  # a killed shell must not leave this helper behind
+
+    def on_signal(signum, frame):
+        raise Cancelled()
+
+    signal.signal(signal.SIGTERM, on_signal)
+    signal.signal(signal.SIGINT, on_signal)
+
+
 def _unlink(path):
     try:
         os.unlink(path)
@@ -382,16 +418,9 @@ def _unlink(path):
 def pair_qr(adb, state, emit, devices=None):
     """Stream: the `pairing` event with the PNG, then the `paired` document
     (or raises AdbError). SIGINT/SIGTERM cancel: the PNG goes, nothing is
-    printed (Cancelled is caught here and None returned)."""
-    die_with_parent()  # a killed shell must not leave this helper behind
-
-    def on_signal(signum, frame):
-        raise Cancelled()
-
-    # Installed before any child: a signal in the first moments is not
-    # lost, and a raise inside run_bounded's wait kills the adb call in flight.
-    signal.signal(signal.SIGTERM, on_signal)
-    signal.signal(signal.SIGINT, on_signal)
+    printed (Cancelled is caught here and None returned; one raised before
+    the `try` below reaches `dispatch`, which swallows it the same way)."""
+    arm_cancel()  # dispatch armed it already; a direct caller gets it here
     state.sweep_pairing_files()
     available, why = mdns_available(adb)
     if not available:
@@ -520,9 +549,11 @@ def describe(adb, state, devices):
     else:
         available, text = False, None
     found = services(adb) if (adb is not None and available) else []
-    attached = {d["serial"] for d in devices}
+    serials = {d["serial"] for d in devices}
+    instances = {devmod.mdns_instance(d["serial"]) for d in devices} - {None}
     for s in found:
-        s["attached"] = s["address"] in attached
+        # By `ip:port`, or by the instance name adb gave an auto-connected phone.
+        s["attached"] = s["address"] in serials or s["instance"] in instances
     return {
         "mdns": {"available": available, "text": text},
         "services": found,

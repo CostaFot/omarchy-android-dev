@@ -66,7 +66,7 @@ HELP = [
     ("pair qr", "streaming: a pairing QR code as a PNG, then wait for the phone to scan it and pair (Ctrl-C cancels)"),
     ("pair code ADDR", "pair with the address and six-digit code from Pair device with pairing code; the code is read from stdin, never argv"),
     ("connect ADDR", "adb connect host[:port] (5555 without a port), then wait until the device is ready"),
-    ("disconnect ADDR", "adb disconnect host[:port]"),
+    ("disconnect ADDR", "adb disconnect host[:port], or the mDNS name of a phone adb connected to on its own"),
     ("tcpip [USBSERIAL]", "go wireless: adb tcpip 5555 on the plugged phone, connect to its Wi-Fi address and select that entry"),
     ("usb [SERIAL]", "back to USB: adb usb; the Wi-Fi entry drops"),
     ("help", "this list"),
@@ -520,7 +520,7 @@ def cmd_connect(ctx, args):
 def cmd_disconnect(ctx, args):
     if len(args) != 1:
         raise BadArgs("disconnect ADDR")
-    address = wlmod.check_address(args[0])
+    address = wlmod.check_target(args[0])
     adb = ctx.require_adb()
     payload = wlmod.disconnect(adb, address)
     return _with_devices(ctx, payload)
@@ -636,8 +636,10 @@ def dispatch(argv, disarm):
         return None
     if command == "pair" and args == ["qr"]:
         disarm()  # waits for the phone to scan, two minutes at most
-        ctx = Context(settings, serial)
+        wlmod.arm_cancel()  # before the server check and the device list: an early cancel must land
+        ctx = None
         try:
+            ctx = Context(settings, serial)
             adb = ctx.require_adb()
             devices = ctx.devices()
             result = wlmod.pair_qr(adb, ctx.state, lambda p: emit(envelope("pair", ok=True, adb=ctx.adb_info(), selected=ctx.selected(), **p)), devices)
@@ -645,7 +647,7 @@ def dispatch(argv, disarm):
                 emit(envelope("pair", ok=True, adb=ctx.adb_info(), selected=result.get("serial") or ctx.selected(), **result))
                 ctx.state.save()
         except AdbError as e:
-            emit(envelope("pair", ok=False, error=e.to_dict(), adb=ctx.adb_info(), event="error"))
+            emit(envelope("pair", ok=False, error=e.to_dict(), adb=ctx.adb_info() if ctx else None, event="error"))
         except wlmod.Cancelled:
             pass
         except OSError:

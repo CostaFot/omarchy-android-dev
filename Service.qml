@@ -583,7 +583,7 @@ Item {
     "  avd NAME             start that emulator (refused while it runs)",
     "  logcat [PKG]         adb logcat in a terminal, following PKG's process when given",
     "  pair start|stop|toggle  a pairing QR code in the panel; the phone scans it from Wireless debugging",
-    "  disconnect ADDR      adb disconnect host[:port]",
+    "  disconnect ADDR      adb disconnect host[:port], or the mDNS name of a phone adb connected to on its own",
     "  tcpip SERIAL         go wireless: adb tcpip 5555 on that plugged phone, connect to its Wi-Fi address, select it (\"\" for the selected device)",
     "  usb SERIAL           back to USB (adb usb) for that entry; the Wi-Fi one drops (\"\" for the selected device)",
     "  refresh              re-read adb and the device list",
@@ -673,8 +673,9 @@ Item {
       return "pair takes start, stop or toggle"
     }
     function disconnect(address: string): string {
-      var a = root.validAddress(address)
-      return a === "" ? "disconnect needs an address as ip:port" : root.act(["disconnect", a])
+      // An address, or the mDNS name adb gave an auto-connected phone (the serial alphabet; the helper checks the shape).
+      var a = root.validAddress(address) || root.validSerial(address)
+      return a === "" ? "disconnect needs an address as ip:port, or a Wi-Fi entry's serial" : root.act(["disconnect", a])
     }
     function tcpip(serial: string): string {
       var s = String(serial || "").trim()

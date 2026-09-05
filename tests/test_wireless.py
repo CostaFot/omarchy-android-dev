@@ -21,6 +21,9 @@ WIFI = "192.168.1.5:5555"
 PAIR_ADDR = "192.168.1.5:37123"
 PHONE_LINE = f"{USB}               device product:cheetah model:Pixel_7 device:cheetah transport_id:3\n"
 WIFI_LINE = f"{WIFI}      device product:cheetah model:Pixel_7 device:cheetah transport_id:4\n"
+# The entry adb's server makes on its own for a paired phone: the mDNS instance and service, no colon.
+MDNS_SERIAL = "adb-ZY22ABCDEF-xyMD0H._adb-tls-connect._tcp."
+MDNS_LINE = f"{MDNS_SERIAL}      device product:cheetah model:Pixel_7 device:cheetah transport_id:5\n"
 HEADER = "List of devices attached\n"
 MDNS_OK = "mdns daemon version [adb discovery 0.0.0]\n"
 MDNS_HEADER = "List of discovered mdns services\n"
@@ -165,6 +168,15 @@ class Connect(FakeAdbCase):
         self.add_rules({"match": "disconnect", "stdout": "", "stderr": "error: something else\n", "code": 1})
         self.assertEqual(self.run_cli("disconnect", WIFI)["error"]["code"], "adb_failed")
 
+    def test_disconnect_takes_the_name_of_an_auto_connected_phone(self):
+        self.add_rules({"match": "disconnect", "stdout": f"disconnected {MDNS_SERIAL}\n"})
+        doc = self.run_cli("disconnect", MDNS_SERIAL)
+        self.assertTrue(doc["ok"], doc)
+        self.assertIn(["disconnect", MDNS_SERIAL], self.calls())
+        # Only that shape: an underscore anywhere else is still refused.
+        self.assertEqual(self.run_cli("disconnect", "some_thing")["error"]["code"], "bad_args")
+        self.assertEqual(self.run_cli("connect", MDNS_SERIAL)["error"]["code"], "bad_args")
+
 
 class PairCode(FakeAdbCase):
     def setUp(self):
@@ -185,6 +197,26 @@ class PairCode(FakeAdbCase):
         self.assertEqual(doc["selected"], WIFI)
         self.assertEqual(doc["notice"], f"Paired with Pixel 7 ({WIFI})")
         self.assertEqual(self.run_cli("devices")["selected"], WIFI)
+
+    def test_an_auto_connected_name_is_the_wifi_entry(self):
+        # After a pair, adb's server connects on its own and the entry carries the mDNS name, not
+        # ip:port. The fake lists it throughout (so it is in `before`, the paired-again case), and
+        # the connect service under its instance name says which host it is on.
+        self.add_rules({"match": "devices -l", "stdout": HEADER + PHONE_LINE + MDNS_LINE},
+                       {"match": "mdns services", "stdout_file": "mdns_services.txt"})
+        doc = self.run_cli("pair", "code", PAIR_ADDR, input="123456\n")
+        self.assertTrue(doc["ok"], doc)
+        self.assertEqual(doc["serial"], MDNS_SERIAL)
+        self.assertEqual(doc["selected"], MDNS_SERIAL)
+        self.assertEqual(doc["notice"], f"Paired with Pixel 7 ({MDNS_SERIAL})")
+        self.assertEqual([d["kind"] for d in doc["devices"]], ["usb", "wifi"])
+        self.assertTrue(any("mdns services" in c for c in self.joined_calls()))
+        self.assertEqual(self.run_cli("devices")["selected"], MDNS_SERIAL)
+        # A different host: nothing found, the pairing is still good.
+        self.add_rules({"match": f"pair 192.168.1.9:37123", "stdin": True, "stdout": PAIRED})
+        doc = self.run_cli("pair", "code", "192.168.1.9:37123", input="123456\n", env={"OMARCHY_ANDROID_DEV_TOTAL_BUDGET": "0"})
+        self.assertTrue(doc["ok"], doc)
+        self.assertIsNone(doc["serial"])
 
     def test_no_new_device_is_still_a_good_pairing(self):
         doc = self.run_cli("pair", "code", PAIR_ADDR, input="123456\n", env={"OMARCHY_ANDROID_DEV_TOTAL_BUDGET": "0"})
@@ -299,6 +331,16 @@ class Status(FakeAdbCase):
         self.assertEqual(doc["pair_seconds"], 120)
         self.assertNotIn("recent_addresses", doc)
 
+    def test_an_auto_connected_phone_is_a_wifi_device_and_its_service_is_attached(self):
+        self.add_rules({"match": "mdns check", "stdout": MDNS_OK}, {"match": "mdns services", "stdout_file": "mdns_services.txt"},
+                       {"match": "devices -l", "stdout": HEADER + PHONE_LINE + MDNS_LINE})
+        doc = self.run_cli("wireless")
+        self.assertTrue(doc["ok"], doc)
+        self.assertEqual([d["serial"] for d in doc["wifi_devices"]], [MDNS_SERIAL])
+        self.assertEqual([d["serial"] for d in doc["usb_devices"]], [USB])
+        connect = [s for s in doc["services"] if s["kind"] == "connect"][0]
+        self.assertTrue(connect["attached"])  # by its instance name, the page does not offer to connect again
+
     def test_without_mdns_the_other_paths_stay(self):
         self.add_rules({"match": "mdns check", "stdout": "", "stderr": "adb: mdns is not supported by this version of adb.\n", "code": 1})
         doc = self.run_cli("wireless")
@@ -404,6 +446,29 @@ class PairQr(FakeAdbCase):
         self.assertEqual(out, "")
         self.assertEqual(self.pngs(), [])
         self.assertEqual(self.wait_for_no_fake_adb().strip(), "")
+
+    def test_a_cancel_before_the_device_list_is_not_lost(self):
+        # The handlers go in before the server check and `devices -l`, so a `pair stop` while
+        # the helper is still listing devices ends the session: nothing printed, no PNG, no adb left.
+        self.add_rules({"match": "devices -l", "stdout": HEADER, "sleep": 5})
+        proc = self.start()
+        for _ in range(50):
+            running = subprocess.run(["pgrep", "-af", r"^/usr/bin/python3 .*fakeadb\.py devices -l"], capture_output=True, text=True).stdout
+            if running.strip():
+                break
+            time.sleep(0.1)
+        self.assertTrue(running.strip(), "the fake adb never started listing")
+        proc.send_signal(signal.SIGINT)
+        out, _ = proc.communicate(timeout=10)
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(out, "")
+        self.assertEqual(self.pngs(), [])
+        for _ in range(30):
+            left = subprocess.run(["pgrep", "-af", r"^/usr/bin/python3 .*fakeadb\.py devices -l"], capture_output=True, text=True).stdout
+            if not left.strip():
+                break
+            time.sleep(0.1)
+        self.assertEqual(left.strip(), "")
 
     def test_sigterm_does_the_same(self):
         proc = self.start()

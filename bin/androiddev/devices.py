@@ -13,17 +13,31 @@ from . import fmt
 from .adb import AdbError, classify, die_with_parent, run_bounded
 
 SERIAL_RE = re.compile(r"^[A-Za-z0-9._:\-]{1,128}$")
+# What adb's server names a phone it connected to on its own through mDNS
+# (a paired phone whose Wireless debugging is on): the service instance
+# plus the service type, `adb-<serialno>-<6 chars>._adb-tls-connect._tcp.`,
+# with or without the trailing dot. No colon in it, so the kind is not read
+# off the serial alone.
+MDNS_SERIAL_RE = re.compile(r"^(.+?)\._adb(?:-tls-connect)?\._tcp\.?$")
 
 
 def valid_serial(serial):
     return bool(serial) and SERIAL_RE.match(serial) is not None
 
 
+def mdns_instance(serial):
+    """The instance name of an mDNS-named serial (`adb-ZY22ABCDEF-xyMD0H`
+    for `adb-ZY22ABCDEF-xyMD0H._adb-tls-connect._tcp.`), else None. It is
+    what `adb mdns services` lists that phone's connect service under."""
+    m = MDNS_SERIAL_RE.match(str(serial or ""))
+    return m.group(1) if m else None
+
+
 def kind_of(serial):
     s = str(serial or "")
     if s.startswith("emulator-") or s.startswith("localhost:"):
         return "emulator"
-    if ":" in s:
+    if ":" in s or mdns_instance(s):
         return "wifi"
     return "usb"
 

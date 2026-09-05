@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1
+
+- Fixed: a phone adb connected to on its own after pairing was listed as plugged in. adb names that entry after the phone's mDNS service (`adb-<serialno>-<6 chars>._adb-tls-connect._tcp.`, no colon), and the plugin read the kind off the colon alone: the pairing notice named the address instead of the phone, nothing was selected, the Wireless page put the phone under *Plugged phones* with a Go wireless row and offered to connect to it again under *Seen on the network*, and the Tools row said over USB. The name is a Wi-Fi entry now; its service counts as attached; a pairing finds it by the host its service advertises; Disconnect takes the name (from the row and over IPC).
+- Fixed: cancelling a QR pairing session in its first moments did nothing. The cancel handlers went in after the adb server check and the device list, and the helper starts with SIGINT ignored, so a `pair stop` while it was still listing devices was dropped and the session ran its two minutes. The handlers are armed first now.
+- Tests: 187.
+
 ## 1.3.0
 
 - **Wireless**: the *Connect to an address* page is gone, and with it the recent addresses in `state.json` (an old file's list is ignored). A paired phone connects on its own whenever its Wireless debugging is on, and one that is on the network but not attached shows under *Seen on the network* with Enter connecting to it, so typing an address was a third way to do what the other two already do. Pairing is by QR code or by code. The helper's `connect ADDR` stays for the terminal and for Go wireless; the IPC verb `connect` is removed (`disconnect`, `tcpip` and `usb` stay). The `connect`, `tcpip` and `wireless` documents no longer carry `recent_addresses`. 183 tests.

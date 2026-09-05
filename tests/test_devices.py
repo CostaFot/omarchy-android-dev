@@ -33,7 +33,8 @@ class Parsing(unittest.TestCase):
                 "ZY22ABC\tunauthorized usb:1-2 transport_id:3\n"
                 "192.168.1.5:5555\toffline transport_id:4\n"
                 "0123\tno permissions (user in plugdev group; are your udev rules wrong?); see [http://x]\n"
-                "localhost:5555\tdevice product:x model:Pixel_7 device:y transport_id:5\n")
+                "localhost:5555\tdevice product:x model:Pixel_7 device:y transport_id:5\n"
+                "adb-ZY22ABC-xyMD0H._adb-tls-connect._tcp.\tdevice product:x model:Pixel_7 device:y transport_id:6\n")
         d = {x["serial"]: x for x in devmod.parse_devices_l(text)}
         self.assertEqual(d["ZY22ABC"]["state"], "unauthorized")
         self.assertEqual(d["ZY22ABC"]["kind"], "usb")
@@ -41,6 +42,14 @@ class Parsing(unittest.TestCase):
         self.assertEqual(d["0123"]["state"], "no permissions")
         self.assertEqual(d["localhost:5555"]["kind"], "emulator")
         self.assertEqual(d["localhost:5555"]["model"], "Pixel_7")
+        # What adb names a phone it connected to on its own through mDNS: no colon, still Wi-Fi.
+        self.assertEqual(d["adb-ZY22ABC-xyMD0H._adb-tls-connect._tcp."]["kind"], "wifi")
+        self.assertEqual(devmod.mdns_instance("adb-ZY22ABC-xyMD0H._adb-tls-connect._tcp."), "adb-ZY22ABC-xyMD0H")
+        self.assertEqual(devmod.mdns_instance("adb-ZY22ABC-xyMD0H._adb-tls-connect._tcp"), "adb-ZY22ABC-xyMD0H")
+        self.assertEqual(devmod.kind_of("adb-emulator-5554._adb._tcp."), "wifi")
+        self.assertIsNone(devmod.mdns_instance("192.168.1.5:5555"))
+        self.assertIsNone(devmod.mdns_instance("ZY22ABC"))
+        self.assertEqual(devmod.kind_of("ZY22ABC"), "usb")
 
     def test_device_list_is_capped(self):
         text = "\n".join(f"serial{i}\tdevice" for i in range(100))

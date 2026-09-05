@@ -4,7 +4,8 @@ import qs.Ui
 
 // Bar widget for Android Dev: the droid glyph, the device count when more
 // than one is attached, dimmed with none; red while the selected device
-// waits for authorisation or is offline. Click opens the hub (Panel.qml),
+// waits for authorisation or is offline, and with a dot while a screen
+// recording runs. Click opens the hub (Panel.qml),
 // middle click re-reads adb and the devices. The data lives in the service
 // (one per shell); this widget registers with it as a host so the service
 // can read its settings and open its panel.
@@ -80,8 +81,11 @@ BarWidget {
   readonly property bool loaded: store ? store.loaded : false
   readonly property bool hasAdb: store ? store.hasAdb : false
   readonly property bool attention: device ? device.state !== "device" : false
+  readonly property bool recording: svc ? svc.recording === true : false
+  readonly property int recordingSeconds: svc ? svc.recordingSeconds : 0
 
-  readonly property string labelText: glyph + (deviceCount > 1 ? " " + deviceCount : "")
+  // A plain black circle (U+25CF, not a Nerd Font glyph) marks a recording.
+  readonly property string labelText: glyph + (recording ? " \u25cf" : "") + (deviceCount > 1 ? " " + deviceCount : "")
 
   readonly property string tooltip: {
     if (!store) return ""
@@ -91,6 +95,7 @@ BarWidget {
     var t = device.label
     if (device.state !== "device") t += " (" + (device.state === "unauthorized" ? "needs authorising" : device.state) + ")"
     if (deviceCount > 1) t += ", " + deviceCount + " attached"
+    if (recording) t += ", recording " + svc.elapsedText(recordingSeconds)
     return t
   }
 
@@ -103,7 +108,7 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     text: root.labelText
-    active: root.attention
+    active: root.attention || root.recording
     dimmed: root.deviceCount === 0
     tooltipText: root.tooltip
 

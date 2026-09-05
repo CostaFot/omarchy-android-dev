@@ -4,7 +4,8 @@
 OMARCHY_ANDROID_DEV_FAKE_SCRIPT names a JSON file: a list of rules, each
 `{"match": "substring of the argv", "stdout": "...", "stdout_file":
 "fixture name", "stdout_hex": "hex bytes", "bytes": N, "stderr": "...", "code": 0, "sleep": s,
-"sleep_after": s}`. The first rule whose `match` is a substring of the
+"sleep_after": s, "file_arg": i, "file_hex": "hex bytes"}`. `file_arg` names the argv
+index of a host path to write `file_hex` to (what `adb pull DST` does). The first rule whose `match` is a substring of the
 space-joined argv answers; a rule without `match` answers everything.
 No matching rule: exit 1 with a message on stderr.
 
@@ -53,6 +54,9 @@ def main():
         elif "stdout" in rule:
             out.write(str(rule["stdout"]).encode("utf-8"))
         out.flush()
+        if "file_arg" in rule:
+            with open(argv[int(rule["file_arg"])], "wb") as f:
+                f.write(bytes.fromhex(rule.get("file_hex", "00")))
         if rule.get("stderr"):
             sys.stderr.write(str(rule["stderr"]))
             sys.stderr.flush()

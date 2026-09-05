@@ -116,7 +116,8 @@ class Live(FakeAdbCase):
 
     def wait_for_no_fake_adb(self):
         for _ in range(20):
-            left = subprocess.run(["pgrep", "-af", "fakeadb.py"], capture_output=True, text=True).stdout
+            # Anchored to the fake's own command line, so a shell whose argv mentions the word is not counted.
+            left = subprocess.run(["pgrep", "-af", r"^/usr/bin/python3 .*fakeadb\.py track-devices"], capture_output=True, text=True).stdout
             if "track-devices" not in left:
                 break
             time.sleep(0.1)

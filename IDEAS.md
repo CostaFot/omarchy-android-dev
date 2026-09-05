@@ -31,6 +31,10 @@ Backlog, not commitments. Dead ideas stay here marked as such so they are not re
 
 ## Helper details worth revisiting
 
+- **Leftover recordings on the device.** A shell restart (or `omarchy plugin disable`) mid-recording SIGKILLs the recorder; PDEATHSIG ends the adb client, screenrecord finishes the file, and `/sdcard/omarchy-android-dev-<stamp>.mp4` stays there with nobody to pull it (seen 2026-09-05, the documented limitation). `record` or `status` could list `/sdcard/omarchy-android-dev-*.mp4` and offer a `Pull the leftover recordings` row, or the next `record` could pull them first.
+- **`record stop` from a terminal.** The plan had a `record.json` with the recorder's pid and a `stop` verb signalling it; dropped in 0.4.0 because the invariant says no PID files. A terminal recording ends with Ctrl-C, the service's with the signal to its own Process. A `--time-limit N` argument (screenrecord's own; `0` lifts the limit on API 34+) would be the terminal-friendly way if one is ever wanted.
+- **Which display a screenshot or a recording targets** on a foldable: `screencap -d` / `screenrecord --display-id` with the ids from `dumpsys SurfaceFlinger --display-id`; see the foldables note below.
+
 - The `page` IPC verb opens the panel on the first registered bar widget when none is open; `open`/`toggle` go through the shell and pick the focused monitor. With two monitors `page` can open on the other one.
 
 - **Foldables act weirdly; come back to them.** Seen on the `Pixel_10_Pro_Fold` AVD (android-37.2-beta3) on 2026-09-05: the emulator window draws the skin misaligned (the inner display over the frame's edge, the hinge along the bottom, a strip of the desktop showing through), `screencap -p` warns about multiple displays and picks the first, and the AVD reports two displays while unfolded. Development moved to the `Medium_Phone` AVD that day. To look at later: which display a screenshot and a recording should target (`-d <id>` from `dumpsys SurfaceFlinger --display-id`), whether the posture (`device_state`) matters to any command, and whether the skin problem is the emulator's or the AVD's.

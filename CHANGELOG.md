@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- **Toggles**: the eight developer toggles (Animations, Show touches, Pointer location, Layout bounds, Airplane mode, Wi-Fi, Mobile data, Bluetooth) as rows with their state read from the device in one call; Enter flips one and every row repaints from the answer. Airplane mode goes through `cmd connectivity` on API 30 and up. IPC `flip NAME` (`toggle` is the panel verb).
+- **Capture**: Screenshot from the panel, and screen recording: `screenrecord` runs on the device while the row counts the seconds and the bar glyph turns red with a dot; stopping pulls the mp4 into the videos folder (`OMARCHY_SCREENRECORD_DIR`, else `~/Videos`, or the new `recordingDir` setting), removes the device copy and notifies. IPC `record start|stop|toggle`; `page` accepts `toggles` and `capture`. The hub shows the running recording.
+- Helper: `record` streams a `recording` event and the final document; it ends on Ctrl-C, SIGTERM or screenrecord's own 3 minute limit, waits for the device file to stop growing, then pulls. `status` names the screenshot and recording folders. A `recordingDir` setting joins the eight; a test pins the manifest defaults and schema to the helper's.
+- Fixed before release: the shell starts its processes with SIGINT ignored and the adb child inherited it, so the first `record stop` did nothing; the helper now installs its handlers before spawning adb, resets SIGINT in every long-lived child and stops the adb client with SIGTERM.
+- 98 offline tests, the recorder among them (SIGINT, SIGTERM and SIGKILL against a fake screenrecord that sleeps; a screenrecord that fails at once).
+
 ## 0.3.0
 
 - The first pages: **Devices** (the picker: every attached device with its state, Enter selects), **Apps** (the package list with a filter box, the Foreground, Running, Debuggable and Other sections, the last package used on that device on top, `r` lists again), the **actions** page for a package (the version and launcher activity, then Launch, Restart, Kill process, Clear app data, Clear data and restart, Force stop, Open deep link, Uninstall behind a confirm dialog, Grant and Revoke all permissions, each with its adb command as the second line) and **Deep link** (a URL box, the recent links, optionally scoped to one package). The hub's device row opens the picker; the Apps and Deep link rows are live.

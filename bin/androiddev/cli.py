@@ -29,6 +29,7 @@ SCHEMA_VERSION = 1
 SETTING_DEFAULTS = {
     "adbPath": "",
     "screenshotDir": "",
+    "recordingDir": "",
     "apkDir": "~/Downloads",
     "scrcpyArgs": "",
     "notify": True,
@@ -48,6 +49,7 @@ HELP = [
     ("perms grant|revoke PKG", "grant or revoke every runtime permission"),
     ("deeplink URL [PKG]", "am start -a VIEW -d URL, scoped to PKG when given"),
     ("screenshot", "screencap to the pictures dir, clipboard and a notification"),
+    ("record", "screenrecord on the device until Ctrl-C (or its 3 min limit), then pull to the videos dir"),
     ("toggles", "the eight developer toggles with their state"),
     ("toggle NAME [on|off]", "flip (or set) animations, touches, pointer, layout, airplane, wifi, data, bluetooth"),
     ("help", "this list"),
@@ -242,6 +244,10 @@ def cmd_status(ctx, args):
             "terminal": _tool(_which("xdg-terminal-exec")),
             "wl_copy": _tool(_which("wl-copy")),
         },
+        "screenshot_dir": capture.screenshot_dir(ctx.settings),
+        "screenshot_dir_text": fmt.display_path(capture.screenshot_dir(ctx.settings)),
+        "recording_dir": capture.recording_dir(ctx.settings),
+        "recording_dir_text": fmt.display_path(capture.recording_dir(ctx.settings)),
         "devices": [],
         "selected": None,
         "last_package": None,
@@ -341,6 +347,20 @@ def cmd_screenshot(ctx, args):
     return capture.screenshot(adb, serial, ctx.settings)
 
 
+def cmd_record(ctx, args, emit_doc):
+    """Streaming like `track`: the `recording` event, then the final
+    document, every one a full envelope."""
+    if args:
+        raise BadArgs("record")
+    adb, serial = ctx.device()
+    label = next((d["label"] for d in ctx.devices() if d["serial"] == serial), serial)
+
+    def send(payload):
+        emit_doc(envelope("record", ok=True, adb=ctx.adb_info(), selected=serial, **payload))
+
+    send(capture.record(adb, serial, ctx.settings, send, device_label=label))
+
+
 def cmd_toggles(ctx, args):
     adb, serial = ctx.device()
     return togmod.read_all(adb, serial)
@@ -418,6 +438,14 @@ def dispatch(argv, disarm):
             devmod.track(ctx.adb, ctx.state)
         except AdbError as e:
             emit(envelope("track", ok=False, error=e.to_dict(), adb=ctx.adb_info(), event="error"))
+        return None
+    if command == "record":
+        disarm()  # runs until the recording ends, minutes at most
+        ctx = Context(settings, serial)
+        try:
+            cmd_record(ctx, args, emit)
+        except AdbError as e:
+            emit(envelope("record", ok=False, error=e.to_dict(), adb=ctx.adb_info(), event="error"))
         return None
     handler = COMMANDS.get(command)
     if handler is None:

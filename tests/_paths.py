@@ -66,8 +66,10 @@ class FakeAdbCase(unittest.TestCase):
             "RECORDER_LOG": self.recorder_log,
             "ANDROID_ADB_SERVER_PORT": "9",
             "OMARCHY_SCREENSHOT_DIR": os.path.join(self.tmp.name, "shots"),
+            "OMARCHY_SCREENRECORD_DIR": os.path.join(self.tmp.name, "casts"),
         }
-        cleared = ["ANDROID_HOME", "ANDROID_SDK_ROOT", "OMARCHY_ANDROID_DEV_DEBUG", "OMARCHY_ANDROID_DEV_TOTAL_BUDGET", "XDG_PICTURES_DIR"]
+        cleared = ["ANDROID_HOME", "ANDROID_SDK_ROOT", "OMARCHY_ANDROID_DEV_DEBUG", "OMARCHY_ANDROID_DEV_TOTAL_BUDGET",
+                   "XDG_PICTURES_DIR", "XDG_VIDEOS_DIR"]
         self._saved = {k: os.environ.get(k) for k in list(self.env) + cleared}
         for k in cleared:
             os.environ.pop(k, None)

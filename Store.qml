@@ -10,7 +10,8 @@ import Quickshell.Io
 // one JSON line per run and keeps it.
 //
 // Owned by Service.qml (one per shell, not per monitor); the bar widget
-// and the panel read it through the service.
+// and the panel read it through the service. The recorder's final
+// document also lands in handle(), from the service.
 QtObject {
   id: store
 
@@ -27,7 +28,7 @@ QtObject {
 
   // The scalars the helper understands (cli.SETTING_DEFAULTS). Keys it does
   // not know are ignored on its side, so this list can lead the helper.
-  readonly property var helperSettingKeys: ["adbPath", "screenshotDir", "apkDir", "scrcpyArgs",
+  readonly property var helperSettingKeys: ["adbPath", "screenshotDir", "recordingDir", "apkDir", "scrcpyArgs",
                                             "notify", "deviceNotifications", "confirmUninstall", "showSystemApps"]
 
   // Serialised once so a re-injection of identical settings (every remount
@@ -117,6 +118,11 @@ QtObject {
   function screenshot() { run(["screenshot"], null) }
   function refreshPackages() { run(["packages"], null) }
   function fetchPackage(pkg) { run(["package", String(pkg)], null) }
+  function refreshToggles() { run(["toggles"], null) }
+
+  // The toggles were read from one device; another selection makes them
+  // stale until the page reads again.
+  onSelectedChanged: toggles = null
 
   // The command of the run in flight ("" between runs), so a page can say
   // "Listing packages…" for its own run and not for someone else's.

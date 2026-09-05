@@ -1,16 +1,29 @@
-"""Screenshots, Omarchy's way: the same directory rule as
-omarchy-capture-screenshot, the file and the clipboard, a notification
-with the image. The bytes come from `exec-out screencap -p` (no device
-temp file), capped at 20 MiB and checked for a PNG signature before the
-file is published.
+"""Screenshots and screen recordings, Omarchy's way.
+
+Screenshots: the same directory rule as omarchy-capture-screenshot, the
+file and the clipboard, a notification with the image. The bytes come
+from `exec-out screencap -p` (no device temp file), capped at 20 MiB and
+checked for a PNG signature before the file is published.
+
+Recordings: `adb shell screenrecord` writes an mp4 on the device while
+this helper waits; a SIGINT or SIGTERM (Ctrl-C, or the service's
+`record stop`) ends the adb client (SIGTERM), adbd hangs up the shell,
+screenrecord finishes the file, and the helper pulls it to the recording directory
+(the same rule as omarchy-capture-screenrecording), removes the device
+copy and notifies. Verified 2026-09-05 on the API 37 emulator: the file
+stopped growing within half a second of the SIGINT with the `moov` atom
+in place, the same shape as a `--time-limit` run.
 """
 
 import os
 import re
+import signal
+import subprocess
+import threading
 import time
 
 from . import fmt, notify
-from .adb import AdbError
+from .adb import AdbError, _pump, die_with_parent
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 _XDG_LINE = re.compile(r'^\s*(XDG_[A-Z_]+_DIR)\s*=\s*"?([^"\n]*)"?\s*$')
@@ -66,6 +79,34 @@ def screenshot_dir(settings):
     return os.path.expanduser(configured) if configured else pictures_dir()
 
 
+def videos_dir():
+    """`${OMARCHY_SCREENRECORD_DIR:-${XDG_VIDEOS_DIR:-$HOME/Videos}}`, as
+    omarchy-capture-screenrecording resolves it."""
+    env = os.environ.get("OMARCHY_SCREENRECORD_DIR")
+    if env:
+        return os.path.expanduser(env)
+    xdg = os.environ.get("XDG_VIDEOS_DIR")
+    if not xdg:
+        try:
+            with open(os.path.join(os.path.expanduser("~"), ".config", "user-dirs.dirs"), "r", encoding="utf-8") as f:
+                xdg = parse_user_dirs(f.read()).get("XDG_VIDEOS_DIR")
+        except OSError:
+            xdg = None
+    return os.path.expanduser(xdg) if xdg else os.path.join(os.path.expanduser("~"), "Videos")
+
+
+def recording_dir(settings):
+    configured = str(settings.get("recordingDir") or "").strip()
+    return os.path.expanduser(configured) if configured else videos_dir()
+
+
+def _ensure_dir(directory):
+    try:
+        os.makedirs(directory, exist_ok=True)
+    except OSError as e:
+        raise AdbError("internal", f"Cannot create {directory}: {e.strerror}") from e
+
+
 def _fresh_path(directory, stem, ext):
     """An exclusive new file; a same-second collision gets a -2, -3 suffix."""
     for n in range(1, 100):
@@ -85,10 +126,7 @@ def screenshot(adb, serial, settings, device_label=None):
     if data is None:
         raise AdbError("adb_failed", "screencap did not return a PNG" + (f": {result.stderr}" if result.stderr else ""), result.stderr)
     directory = screenshot_dir(settings)
-    try:
-        os.makedirs(directory, exist_ok=True)
-    except OSError as e:
-        raise AdbError("internal", f"Cannot create {directory}: {e.strerror}") from e
+    _ensure_dir(directory)
     stamp = time.strftime("%Y-%m-%d_%H-%M-%S")
     fd, path = _fresh_path(directory, f"android-{stamp}", ".png")
     try:
@@ -105,6 +143,150 @@ def screenshot(adb, serial, settings, device_label=None):
         "size": len(data),
         "size_text": fmt.size_text(len(data)),
         "copied": copied,
+        "notified": notified,
+        "warning": warning,
+    }
+
+
+# ---- screen recording --------------------------------------------------------
+
+DEVICE_RECORD_DIR = "/sdcard"
+SETTLE_SECONDS = 5.0
+
+
+def device_file_size(adb, serial, path):
+    """The size of a device file through `stat -c %s`, or None."""
+    try:
+        result = adb.shell(serial, "stat", "-c", "%s", path, timeout=5)
+    except AdbError:
+        return None
+    for line in result.lines():
+        try:
+            return int(line.strip())
+        except ValueError:
+            continue
+    return None
+
+
+def wait_for_file(adb, serial, path, budget=SETTLE_SECONDS):
+    """screenrecord finishes the mp4 on its own after the hang-up; wait until
+    the file is there and has stopped growing (two equal reads), at most
+    `budget` seconds. Returns the last size seen (None: never there)."""
+    deadline = time.monotonic() + budget
+    last = None
+    while time.monotonic() < deadline:
+        size = device_file_size(adb, serial, path)
+        if size is not None and size > 0 and size == last:
+            return size
+        last = size
+        time.sleep(0.25)
+    return last
+
+
+def record(adb, serial, settings, emit, device_label=None):
+    """Stream: one `recording` event once screenrecord is running, then the
+    final `recorded` document (or raises AdbError) when the recording ends,
+    by signal or by screenrecord's own time limit (180 s by default)."""
+    die_with_parent()  # a killed shell must not leave this helper behind
+    directory = recording_dir(settings)
+    _ensure_dir(directory)
+    stamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+    device_path = f"{DEVICE_RECORD_DIR}/omarchy-android-dev-{stamp}.mp4"
+    stopping = {"flag": False}
+    child = {}
+
+    def on_signal(signum, frame):
+        # Ending the adb client (SIGTERM; the shell's children inherit an
+        # ignored SIGINT) closes its connection; adbd hangs up the remote
+        # shell and screenrecord, which handles SIGHUP, finishes the file.
+        stopping["flag"] = True
+        proc = child.get("proc")
+        if proc is not None:
+            try:
+                proc.terminate()
+            except OSError:
+                pass
+
+    # Installed before the child starts, so a signal in the first moments
+    # is not lost and the child does not inherit a handler.
+    signal.signal(signal.SIGTERM, on_signal)
+    signal.signal(signal.SIGINT, on_signal)
+    proc = adb.popen(["shell", "screenrecord", device_path], serial=serial)
+    child["proc"] = proc
+    started = time.time()
+    if stopping["flag"]:
+        on_signal(None, None)
+    out = {"data": bytearray(), "truncated": False}
+    err = {"data": bytearray(), "truncated": False}
+    threading.Thread(target=_pump, args=(proc.stdout, fmt.CAP_DEFAULT, out, proc), daemon=True).start()
+    threading.Thread(target=_pump, args=(proc.stderr, fmt.CAP_STDERR, err, proc), daemon=True).start()
+    try:
+        # screenrecord that cannot start (no encoder, a bad path) fails
+        # within the first moments; give it that long before announcing.
+        try:
+            proc.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            notify.send(settings, "Recording the Android screen", device_label or serial)
+            emit({
+                "event": "recording",
+                "device_path": device_path,
+                "directory": directory,
+                "directory_text": fmt.display_path(directory),
+                "started_at": int(started),
+            })
+            proc.wait()
+    finally:
+        if proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=2)
+            except (OSError, subprocess.TimeoutExpired):
+                try:
+                    proc.kill()
+                    proc.wait(timeout=1)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+    seconds = max(0, int(time.time() - started))
+    stderr = fmt.clean(bytes(err["data"]).decode("utf-8", errors="replace").strip(), 512)
+    stdout = fmt.clean(bytes(out["data"]).decode("utf-8", errors="replace").strip(), 512)
+    if not stopping["flag"] and proc.returncode != 0:
+        raise AdbError("adb_failed", "screenrecord failed" + (f": {stderr or stdout}" if stderr or stdout else f" (exit {proc.returncode})"), stderr)
+    size_on_device = wait_for_file(adb, serial, device_path)
+    if not size_on_device:
+        raise AdbError("adb_failed", "screenrecord left no file on the device" + (f": {stderr or stdout}" if stderr or stdout else ""), stderr)
+    fd, path = _fresh_path(directory, f"android-{stamp}", ".mp4")
+    os.close(fd)
+    try:
+        adb.run(["pull", device_path, path], serial=serial, timeout=120)
+    except AdbError as e:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        raise AdbError(e.code, f"Could not pull the recording: {e.message}", e.stderr) from e
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        size = 0
+    warning = None
+    try:
+        adb.shell(serial, "rm", "-f", device_path, timeout=10)
+        removed = True
+    except AdbError as e:
+        removed = False
+        warning = f"The device copy could not be removed ({e.message}); it is at {device_path}"
+    notified = notify.send(settings, "Android screen recording saved", fmt.display_path(path))
+    return {
+        "event": "recorded",
+        "notice": f"Recording saved: {fmt.display_path(path)}",
+        "path": path,
+        "path_text": fmt.display_path(path),
+        "size": size,
+        "size_text": fmt.size_text(size),
+        "seconds": seconds,
+        "seconds_text": fmt.elapsed_text(seconds),
+        "device_path": device_path,
+        "removed": removed,
         "notified": notified,
         "warning": warning,
     }

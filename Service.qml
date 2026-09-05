@@ -6,7 +6,8 @@ import Quickshell.Io
 // Android Dev service: headless, loaded once per shell while the plugin is
 // enabled (`keepLoaded`). Owns the Store (the helper queue and the last
 // documents), the device tracker (one `omarchy-android-dev track` process,
-// restarted with backoff), the device notifications and the plugin's IPC
+// restarted with backoff), the screen recorder (one `record` process while
+// a recording runs), the device notifications and the plugin's IPC
 // target. Bar widgets register themselves as hosts; the first one lends
 // its settings (the shell injects settings only into bar widgets) and the
 // panel verbs route through the shell's own summon/hide, which picks the
@@ -171,6 +172,114 @@ Item {
     reportedUnauthorized = seen
   }
 
+  // ---- The recorder --------------------------------------------------------
+  // `record` runs screenrecord on the device and streams a `recording`
+  // event once it is going, then one final document (`recorded`, or an
+  // `error`) when it ends: on SIGINT from here (`recorder.signal(2)`, what
+  // Ctrl-C does in a terminal) or on screenrecord's own 3 minute limit.
+  // The helper pulls the mp4, removes the device copy and sends the
+  // notification itself; the final document goes through the store like
+  // any other, so the panel shows the notice. One recording per shell.
+  property bool recording: false
+  property bool recordingStopping: false
+  property double recordingStartedAt: 0
+  property int recordingSeconds: 0
+  property string recordingDevicePath: ""
+  readonly property bool recorderRunning: recorder.running
+
+  function recorderCommand() {
+    return ["/bin/sh", "-c", 'exec "$0" "$@"', "/usr/bin/python3",
+            pluginDir + "/bin/omarchy-android-dev", "--settings", store.settingsJson, "record"]
+  }
+
+  function startRecording() {
+    if (recorder.running) return "already recording"
+    recording = false
+    recordingStopping = false
+    recordingSeconds = 0
+    recordingDevicePath = ""
+    recorder.command = recorderCommand()
+    recorder.running = true
+    return "requested"
+  }
+
+  function stopRecording() {
+    if (!recorder.running) return "not recording"
+    recordingStopping = true
+    recorder.signal(2)  // SIGINT: the helper ends adb, pulls the file and answers
+    return "stopping"
+  }
+
+  function toggleRecording() { return recorder.running ? stopRecording() : startRecording() }
+
+  function elapsedText(seconds) {
+    var s = Math.max(0, Math.floor(Number(seconds) || 0))
+    var r = s % 60
+    return Math.floor(s / 60) + ":" + (r < 10 ? "0" : "") + r
+  }
+
+  function applyRecorderLine(line) {
+    var text = String(line || "").trim()
+    if (text === "" || text.length > 65536) return
+    var ev
+    try {
+      ev = JSON.parse(text)
+    } catch (e) {
+      return
+    }
+    if (!ev || typeof ev !== "object") return
+    if (ev.event === "recording") {
+      recording = true
+      recordingStartedAt = Date.now()
+      recordingSeconds = 0
+      recordingDevicePath = String(ev.device_path || "")
+      return
+    }
+    // The final document (`recorded` or `error`): merged like any other,
+    // so the notice and lastError are the panel's; the helper sent its
+    // own notification for a saved file, a failure gets one here.
+    recording = false
+    var doc = store.handle(text)
+    if (doc && doc.ok === false && store.notifyEnabled) {
+      var dev = store.selectedDevice
+      notify(store.lastError !== "" ? store.lastError : "The recording failed", dev ? dev.label : "")
+    }
+  }
+
+  Process {
+    id: recorder
+    stdout: SplitParser {
+      onRead: function(line) { root.applyRecorderLine(line) }
+    }
+    onRunningChanged: {
+      if (running) return
+      // The final line may still be on its way; decide after a moment.
+      recorderExitFallback.restart()
+    }
+  }
+
+  Timer {
+    id: recorderExitFallback
+    interval: 300
+    repeat: false
+    onTriggered: {
+      if (root.recording) {
+        // Ended without a final document: could not start, or was killed.
+        root.recording = false
+        root.store.showNotice("The recording ended without an answer", true)
+      }
+      root.recordingStopping = false
+      root.recordingDevicePath = ""
+    }
+  }
+
+  Timer {
+    interval: 1000
+    repeat: true
+    running: root.recording
+    onTriggered: root.recordingSeconds = Math.floor((Date.now() - root.recordingStartedAt) / 1000)
+  }
+
   // omarchy-notification-send as argv, fire and forget. Device labels are
   // one argument each, never a shell string.
   function notify(headline, body) {
@@ -218,10 +327,13 @@ Item {
   })
 
   // Disabling the plugin destroys this item: the tracker (and through it
-  // adb track-devices) and any helper still running go with it.
+  // adb track-devices), the recorder and any helper still running go with
+  // it. A recording in flight is asked to stop, but the shell kills the
+  // process right after, so the mp4 stays on the device (documented).
   Component.onDestruction: {
     stopping = true
     stopTracker()
+    if (recorder.running) recorder.signal(2)
     if (store.proc.running) store.proc.signal(15)
   }
 
@@ -241,6 +353,8 @@ Item {
     })
     return "requested"
   }
+
+  readonly property var toggleNames: ["animations", "touches", "pointer", "layout", "airplane", "wifi", "data", "bluetooth"]
 
   // A package name as the IPC verbs accept it; the helper checks again.
   function validPackage(pkg) {
@@ -295,6 +409,7 @@ Item {
       busy: s.busy,
       error_code: s.lastErrorCode,
       error: s.lastError,
+      recording: { active: recording, stopping: recordingStopping, seconds: recordingSeconds, device_path: recordingDevicePath },
       hosts: hosts.length,
       opened: opened
     })
@@ -304,7 +419,7 @@ Item {
     "omarchy-shell costafot.android-dev <verb> [args]",
     "  help                 this list",
     "  open | close | toggle  the panel (show/hide are aliases)",
-    "  page NAME            open the panel on a page: hub devices packages deeplink",
+    "  page NAME            open the panel on a page: hub devices packages deeplink toggles capture",
     "  status               one JSON line: adb, devices, tracker, errors",
     "  devices              one JSON line: the attached devices",
     "  select SERIAL        make SERIAL the selected device",
@@ -313,6 +428,8 @@ Item {
     "  clear PKG            pm clear PKG",
     "  deeplink URL         am start -a VIEW -d URL",
     "  screenshot           screenshot of the selected device: file, clipboard, notification",
+    "  record start|stop|toggle  screen recording of the selected device; stop pulls the mp4 to the videos folder",
+    "  flip NAME            flip a developer toggle: animations touches pointer layout airplane wifi data bluetooth",
     "  refresh              re-read adb and the device list",
     "Action verbs return at once; the result arrives as a notification and in the panel."
   ]
@@ -359,6 +476,20 @@ Item {
       return root.act(["deeplink", u])
     }
     function screenshot(): string { root.store.screenshot(); return "requested" }
+    // `toggle` is the panel verb (the kit's convention), so the developer
+    // toggles flip with `flip`.
+    function flip(name: string): string {
+      var n = String(name || "").trim().toLowerCase()
+      if (root.toggleNames.indexOf(n) === -1) return "flip takes one of: " + root.toggleNames.join(" ")
+      return root.act(["toggle", n])
+    }
+    function record(mode: string): string {
+      var m = String(mode || "").trim().toLowerCase()
+      if (m === "start") return root.startRecording()
+      if (m === "stop") return root.stopRecording()
+      if (m === "" || m === "toggle") return root.toggleRecording()
+      return "record takes start, stop or toggle"
+    }
     function refresh(): string { root.store.refreshStatus(); return "requested" }
   }
 }

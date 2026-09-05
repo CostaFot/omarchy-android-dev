@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "costafot.android-dev",
   "name": "Android Dev",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "CostaFot",
   "license": "MIT",
   "description": "The Android developer's side of a device, on the bar: adb devices, packages and their actions, developer toggles, screenshots, deep links, APKs, the emulator, scrcpy and logcat.",
@@ -29,6 +29,7 @@
     "defaults": {
       "adbPath": "",
       "screenshotDir": "",
+      "recordingDir": "",
       "apkDir": "~/Downloads",
       "scrcpyArgs": "",
       "notify": true,
@@ -49,6 +50,13 @@
         "type": "path",
         "label": "Screenshot folder",
         "description": "Empty uses Omarchy's screenshot folder (OMARCHY_SCREENSHOT_DIR, else your Pictures folder).",
+        "defaultValue": ""
+      },
+      {
+        "key": "recordingDir",
+        "type": "path",
+        "label": "Recording folder",
+        "description": "Empty uses Omarchy's screen recording folder (OMARCHY_SCREENRECORD_DIR, else your Videos folder).",
         "defaultValue": ""
       },
       {

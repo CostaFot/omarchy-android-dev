@@ -34,10 +34,17 @@ SERVER_STAMP_WINDOW = 10.0
 def die_with_parent():
     """PR_SET_PDEATHSIG: SIGTERM from the kernel when the parent thread that
     started us goes away. Linux only, best effort; used by the helper for
-    itself (`track`) and by the tracker's adb child."""
+    itself (`track`, `record`) and by its long-lived adb children. Those
+    children also get SIGINT back at its default: the shell starts its
+    processes with SIGINT ignored and an ignored signal survives exec
+    (seen 2026-09-05: `record stop` did nothing to the adb child)."""
+    import signal
+    try:
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+    except (OSError, ValueError):
+        pass
     try:
         import ctypes
-        import signal
         libc = ctypes.CDLL(None, use_errno=True)
         libc.prctl(1, signal.SIGTERM, 0, 0, 0)
     except (OSError, AttributeError):

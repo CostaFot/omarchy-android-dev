@@ -4,7 +4,8 @@ import qs.Commons
 import qs.Ui
 
 // Popup for the Android Dev bar widget: the hub is the selected device with
-// the pages hanging off it. Pages live on a stack; Escape and Backspace
+// the pages hanging off it (Devices, Apps and a package's actions, Deep
+// link, Toggles, Capture; the rest arrive with their versions). Pages live on a stack; Escape and Backspace
 // walk back, Escape on the hub closes. The data is the service's Store
 // (one per shell), reached through `service`; this panel never runs the
 // helper for itself beyond asking the store (or the service, for actions
@@ -39,6 +40,7 @@ Panel {
     if (!store) return
     if (page === "packages") store.refreshPackages()
     else if (page === "actions") store.fetchPackage(current.pkg)
+    else if (page === "toggles") store.refreshToggles()
     else store.refreshStatus()
   }
 
@@ -57,7 +59,7 @@ Panel {
     capture: "Capture", apks: "APKs", text: "Send text", tools: "Tools", settings: "Settings"
   })
   // Pages the IPC `page` verb may open straight onto.
-  readonly property var ipcPages: ["hub", "devices", "packages", "deeplink"]
+  readonly property var ipcPages: ["hub", "devices", "packages", "deeplink", "toggles", "capture"]
 
   function push(entry) {
     var top = Object.assign({}, current, { cursor: selectedIndex, query: filterField.text })
@@ -98,6 +100,7 @@ Panel {
     if (store) {
       if (entry.page === "packages") store.refreshPackages()
       else if (entry.page === "actions" && entry.pkg) store.fetchPackage(entry.pkg)
+      else if (entry.page === "toggles") store.refreshToggles()
     }
     Qt.callLater(function() {
       var wanted = entry.cursor
@@ -125,6 +128,8 @@ Panel {
     else if (page === "packages") body = packageRows()
     else if (page === "actions") body = actionRows()
     else if (page === "deeplink") body = deeplinkRows()
+    else if (page === "toggles") body = toggleRows()
+    else if (page === "capture") body = captureRows()
     else body = soonRows()
     for (var i = 0; i < body.length; i++) out.push(body[i])
     var s = root.store
@@ -141,8 +146,8 @@ Panel {
   readonly property var pageRows: [
     { icon: "\uf00a", label: "Apps", detail: "Packages, their actions and deep links", page: "packages" },
     { icon: "\uf0c1", label: "Deep link", detail: "Open a URL on the device", page: "deeplink" },
-    { icon: "\uf1de", label: "Toggles", detail: "Animations, touches, layout bounds, airplane, Wi-Fi, data, Bluetooth", page: "toggles", version: "0.4.0" },
-    { icon: "\uf030", label: "Capture", detail: "Screenshot and screen recording", page: "capture", version: "0.4.0" },
+    { icon: "\uf1de", label: "Toggles", detail: "Animations, touches, layout bounds, airplane, Wi-Fi, data, Bluetooth", page: "toggles" },
+    { icon: "\uf030", label: "Capture", detail: "Screenshot and screen recording", page: "capture" },
     { icon: "\uf1b2", label: "APKs", detail: "Install from a folder", page: "apks", version: "0.5.0" },
     { icon: "\uf11c", label: "Send text", detail: "Type text or the clipboard on the device", page: "text", version: "0.5.0" },
     { icon: "\uf0ad", label: "Tools", detail: "scrcpy, emulators, logcat", page: "tools", version: "0.5.0" },
@@ -175,6 +180,9 @@ Panel {
                  detail: s.deviceCount > 1 ? s.deviceCount + " attached, none selected" : "Connect a device or start an emulator",
                  page: "devices" })
     }
+    if (svc && svc.recording)
+      out.push({ type: "note", urgent: true, icon: "\uf03d", label: "Recording · " + svc.elapsedText(svc.recordingSeconds),
+                 detail: "Stop it on the Capture page" })
     if (s.hasAdb && svc && svc.trackerError !== "" && svc.trackerErrorCode !== "no_adb")
       out.push({ type: "note", urgent: true, label: "Device tracking stopped", detail: svc.trackerError })
     if (s.lastError !== "" && s.lastErrorCode !== "no_adb" && s.notice === "")
@@ -337,6 +345,67 @@ Panel {
     return out
   }
 
+  // The eight developer toggles, in the Windows order plus Bluetooth; the
+  // state word comes from the helper, the command text is a literal.
+  readonly property var toggleOrder: ["animations", "touches", "pointer", "layout", "airplane", "wifi", "data", "bluetooth"]
+  readonly property var toggleCommands: ({
+    animations: "settings put global *_animation_scale 0|1",
+    touches: "settings put system show_touches",
+    pointer: "settings put system pointer_location",
+    layout: "setprop debug.layout, then a poke at the activity service",
+    airplane: "cmd connectivity airplane-mode (settings put + broadcast before API 30)",
+    wifi: "svc wifi enable|disable",
+    data: "svc data enable|disable",
+    bluetooth: "svc bluetooth enable|disable"
+  })
+
+  function toggleRows() {
+    var s = root.store
+    var out = []
+    if (!deviceGate(out)) return out
+    var t = s.toggles
+    if (!t) {
+      out.push({ type: "note", label: s.busy && s.runningCommand === "toggles" ? "Reading the toggles…" : "Press r to read the toggles" })
+      return out
+    }
+    for (var i = 0; i < toggleOrder.length; i++) {
+      var name = toggleOrder[i]
+      var v = t[name]
+      if (!v) continue
+      // nf-fa-toggle_on / toggle_off / question, as escapes.
+      var icon = v.on === true ? "\uf205" : v.on === false ? "\uf204" : "\uf128"
+      out.push({ type: "action", icon: icon, label: v.label || name, detail: (v.text || "unknown") + " · " + toggleCommands[name],
+                 action: "toggle", name: name })
+    }
+    return out
+  }
+
+  function captureRows() {
+    var s = root.store
+    var svc = root.service
+    var out = []
+    var st = s.status
+    // The recording rows come before the device gate: a recording keeps
+    // going (and needs its Stop row) whatever the tracker says meanwhile.
+    if (svc && svc.recordingStopping) {
+      out.push({ type: "note", icon: "\uf03d", label: "Saving the recording…", detail: "Pulling the mp4 from the device" })
+    } else if (svc && svc.recording) {
+      out.push({ type: "action", icon: "\uf04d", label: "Stop recording", urgent: true,
+                 detail: "Recording · " + svc.elapsedText(svc.recordingSeconds) + " · Enter stops and saves the mp4", action: "record" })
+    } else if (svc && svc.recorderRunning) {
+      out.push({ type: "note", icon: "\uf03d", label: "Starting the recording…" })
+    }
+    if (!deviceGate(out)) return out
+    out.push({ type: "action", icon: "\uf030", label: "Screenshot",
+               detail: "screencap -p · " + (st && st.screenshot_dir_text ? st.screenshot_dir_text : "the pictures folder") + " · copied to the clipboard",
+               action: "screenshot" })
+    if (svc && !svc.recorderRunning)
+      out.push({ type: "action", icon: "\uf03d", label: "Start recording",
+                 detail: "screenrecord on the device · " + (st && st.recording_dir_text ? st.recording_dir_text : "the videos folder") + " when stopped · 3 min limit",
+                 action: "record" })
+    return out
+  }
+
   function soonRows() {
     for (var i = 0; i < pageRows.length; i++)
       if (pageRows[i].page === page)
@@ -350,6 +419,8 @@ Panel {
     if (page === "packages") return "Type to filter · ↑/↓ move · Enter opens · r lists again · Esc back"
     if (page === "actions") return "j/k move · Enter runs it · Esc back"
     if (page === "deeplink") return "Type a URL, Enter launches · ↑/↓ recent · Esc back"
+    if (page === "toggles") return "j/k move · Enter flips · r reads again · Esc back"
+    if (page === "capture") return "j/k move · Enter runs it · Esc back"
     return "Esc or Backspace back"
   }
 
@@ -421,6 +492,9 @@ Panel {
     else if (row.action === "package") push({ page: "actions", pkg: row.pkg })
     else if (row.action === "deeplink") act(["deeplink", row.url].concat(row.pkg ? [row.pkg] : []))
     else if (row.action === "app") runAppAction(row)
+    else if (row.action === "toggle") act(["toggle", row.name])
+    else if (row.action === "screenshot") act(["screenshot"])
+    else if (row.action === "record") { if (service && typeof service.toggleRecording === "function") service.toggleRecording() }
     else if (row.page) push({ page: row.page })
   }
 

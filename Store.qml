@@ -153,10 +153,19 @@ QtObject {
   }
 
   // ---- Running the helper -------------------------------------------------
-  // One process at a time; a request made while one runs replaces any
-  // earlier waiting request (last command wins). Both the exit code and the
-  // collected stdout have to arrive before a run is finalised, in either
-  // order, hence the two flags. `runGen` numbers the runs: every timer
+  // One process at a time; requests made while one runs wait in
+  // `pendingRuns`, in order. A read (`isRead`: status, devices, packages, a
+  // package, toggles, an APK listing, tools, wireless) replaces any read
+  // already waiting, since the later one answers for both; an action
+  // (anything that changes the device, or carries stdin: the pairing code)
+  // is never dropped. Before 1.3.2 one request waited and the last one won,
+  // so a `pair code` queued behind the page's own read was replaced by an
+  // `r` pressed meanwhile, without a word. Past `maxPending` waiting
+  // requests the newcomer is refused with a notice; a run that hits its
+  // budget drops the queue behind it (the helper is stuck, every waiting
+  // request would be too). Both the exit code and the collected stdout have
+  // to arrive before a run is finalised, in either order, hence the two
+  // flags. `runGen` numbers the runs: every timer
   // carries the generation it was armed for and does nothing when a later
   // run has started, so a stale timer can never kill or finalise the wrong
   // run.
@@ -168,7 +177,9 @@ QtObject {
   property bool sawExit: false
   property bool tripwireFired: false
   property bool timedOut: false
-  property var pendingRun: null
+  property var pendingRuns: []
+  readonly property int maxPending: 8
+  readonly property var readCommands: ["status", "devices", "packages", "package", "toggles", "tools", "wireless"]
   property var currentRun: null
   property int runGen: 0
 
@@ -177,7 +188,7 @@ QtObject {
   // document at this point, and this store sends SIGTERM `killGraceMs`
   // later, then SIGKILL, for a helper stuck where Python's signal handler
   // cannot run (a blocking C call). Until then every later request queues
-  // behind the stuck one (last command wins).
+  // behind the stuck one, and goes with it when the budget is hit.
   readonly property int helperBudgetSeconds: 60
   readonly property int killGraceMs: 10000
 
@@ -191,8 +202,8 @@ QtObject {
   // `stdinText` goes to the helper's stdin (`pair code` reads the six
   // digits there).
   function run(args, onDone, stdinText) {
-    var job = { args: args, onDone: onDone, stdin: typeof stdinText === "string" ? stdinText : "" }
-    if (busy) { pendingRun = job; return }
+    var job = { args: args, onDone: onDone, stdin: typeof stdinText === "string" ? stdinText : "", read: isRead(args) }
+    if (busy) { enqueue(job); return }
     runGen += 1
     var gen = runGen
     job.gen = gen
@@ -219,6 +230,30 @@ QtObject {
     killTimer.gen = gen
     killFallback.gen = gen
     killTimer.restart()
+  }
+
+  // A read answers a page; the latest one waiting is enough.
+  function isRead(args) {
+    var head = args && args.length ? String(args[0]) : ""
+    if (head === "apk") return args.length > 1 && String(args[1]) === "list"
+    return readCommands.indexOf(head) >= 0
+  }
+
+  function enqueue(job) {
+    var waiting = job.read ? pendingRuns.filter(function(j) { return !j.read }) : pendingRuns.slice()
+    if (waiting.length >= maxPending) {
+      showNotice("Busy: " + waiting.length + " requests are waiting; try again in a moment", true)
+      return
+    }
+    waiting.push(job)
+    pendingRuns = waiting
+  }
+
+  function runNext() {
+    if (busy || pendingRuns.length === 0) return
+    var next = pendingRuns[0]
+    pendingRuns = pendingRuns.slice(1)
+    run(next.args, next.onDone, next.stdin)
   }
 
   function maybeFinalize() {
@@ -250,7 +285,10 @@ QtObject {
     var text = capturedText.trim()
     var doc = null
     if (timedOut) {
-      fail("timeout", "The Android Dev helper did not answer within " + (helperBudgetSeconds + killGraceMs / 1000) + " s and was stopped")
+      var dropped = pendingRuns.length
+      pendingRuns = []
+      fail("timeout", "The Android Dev helper did not answer within " + (helperBudgetSeconds + killGraceMs / 1000) + " s and was stopped"
+           + (dropped > 0 ? "; " + dropped + " waiting request" + (dropped === 1 ? "" : "s") + " dropped" : ""))
     } else if (text === "") {
       if (tripwireFired) {
         // Already explained.
@@ -263,11 +301,7 @@ QtObject {
       doc = handle(text)
     }
     if (job && typeof job.onDone === "function") job.onDone(doc)
-    if (pendingRun) {
-      var next = pendingRun
-      pendingRun = null
-      Qt.callLater(function() { store.run(next.args, next.onDone, next.stdin) })
-    }
+    if (pendingRuns.length > 0) Qt.callLater(function() { store.runNext() })
   }
 
   // Merges one document. "Has data" and "has error" are independent: a

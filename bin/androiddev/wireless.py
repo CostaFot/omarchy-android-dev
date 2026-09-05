@@ -296,53 +296,47 @@ def pair(adb, address, code, pdeathsig=False):
     return {"address": address, "guid": guid, "pair_text": text}
 
 
-def new_wifi_device(adb, before, budget=NEW_DEVICE_WAIT):
-    """The first ready Wi-Fi device that was not in `before` (a set of
-    serials), polled from `devices -l`; None when none shows up in time."""
+def wifi_device_on(adb, host, budget=NEW_DEVICE_WAIT):
+    """The ready Wi-Fi entry on `host`, polled from `devices -l` for up to
+    `budget` seconds: a phone paired again while connected is there at
+    once, a fresh one shows up as adb connects to it on its own. An
+    `ip:port` serial carries its host; an mDNS-named one is on the host its
+    connect service advertises (one `mdns services` call per poll, made
+    only when such an entry is ready). Never an entry on another host:
+    before 1.3.2 the first new Wi-Fi entry anywhere was taken, so a second
+    known phone whose Wireless debugging came on during the wait could be
+    selected and named. None when nothing on that host is ready in time.
+    No labels are asked for: a Wi-Fi entry's label is its model, and the
+    poll must not cost one `emu avd name` per running emulator."""
     deadline = time.monotonic() + budget
     while True:
         try:
-            devices = devmod.list_devices(adb)
+            devices = devmod.list_devices(adb, with_labels=False)
         except AdbError:
             devices = []
+        named = None
         for d in devices:
-            if d["kind"] == "wifi" and d["serial"] not in before and d["state"] == "device":
+            if d["kind"] != "wifi" or d["state"] != "device":
+                continue
+            instance = devmod.mdns_instance(d["serial"])
+            if instance is None:
+                if d["serial"].rpartition(":")[0] == host:
+                    return d
+                continue
+            if named is None:
+                named = {s["instance"]: s["host"] for s in services(adb) if s["kind"] == "connect"}
+            if named.get(instance) == host:
                 return d
         if time.monotonic() >= deadline:
             return None
         time.sleep(0.5)
 
 
-def attached_wifi_device(adb, host):
-    """A ready Wi-Fi entry on `host` that is already in the list (a phone
-    paired again while connected), or None. An `ip:port` serial carries its
-    host; an mDNS-named one is on the host its connect service advertises
-    (one `mdns services` call, made only when such an entry is ready)."""
-    try:
-        devices = devmod.list_devices(adb)
-    except AdbError:
-        return None
-    ready = [d for d in devices if d["kind"] == "wifi" and d["state"] == "device"]
-    named = None
-    for d in ready:
-        instance = devmod.mdns_instance(d["serial"])
-        if instance is None:
-            if d["serial"].rpartition(":")[0] == host:
-                return d
-            continue
-        if named is None:
-            named = {s["instance"]: s["host"] for s in services(adb) if s["kind"] == "connect"}
-        if named.get(instance) == host:
-            return d
-    return None
-
-
-def finish_pairing(adb, state, before, address):
-    """After a good `adb pair`: adb connects on its own; wait for the new
-    Wi-Fi entry (or take the one already there on that host), select it,
-    and say who was paired."""
+def finish_pairing(adb, state, address):
+    """After a good `adb pair`: adb connects on its own; wait for the Wi-Fi
+    entry on that host, select it, and say who was paired."""
     host = address.rpartition(":")[0]
-    dev = attached_wifi_device(adb, host) or new_wifi_device(adb, before)
+    dev = wifi_device_on(adb, host)
     if dev:
         state.select(dev["serial"])
     return {
@@ -395,7 +389,7 @@ def write_qr_png(payload, path):
 def arm_cancel():
     """The QR session's cancel: SIGINT or SIGTERM raise `Cancelled`, and this
     helper dies with its parent. `dispatch` calls it before the adb server
-    check and the device list, not just `pair_qr`: the shell starts the
+    check and the mDNS check, not just `pair_qr`: the shell starts the
     helper with SIGINT ignored, so until a handler is in place a `pair
     stop` in the first moments was simply dropped and the session went on
     (found in the 1.2.0 review). Idempotent."""
@@ -415,7 +409,7 @@ def _unlink(path):
         pass
 
 
-def pair_qr(adb, state, emit, devices=None):
+def pair_qr(adb, state, emit):
     """Stream: the `pairing` event with the PNG, then the `paired` document
     (or raises AdbError). SIGINT/SIGTERM cancel: the PNG goes, nothing is
     printed (Cancelled is caught here and None returned; one raised before
@@ -430,7 +424,6 @@ def pair_qr(adb, state, emit, devices=None):
         raise AdbError("state_corrupt", state.error or "The state directory is not usable")
     name, password = make_pairing_secret()
     window = pair_window()
-    before = {d["serial"] for d in (devices or [])}
     try:
         write_qr_png(qr_payload(name, password), path)
         started = time.time()
@@ -448,7 +441,7 @@ def pair_qr(adb, state, emit, devices=None):
             for s in services(adb, pdeathsig=True):
                 if s["kind"] == "pairing" and s["instance"] == name:
                     payload = pair(adb, s["address"], password, pdeathsig=True)
-                    payload.update(finish_pairing(adb, state, before, s["address"]))
+                    payload.update(finish_pairing(adb, state, s["address"]))
                     payload["event"] = "paired"
                     return payload
             if time.monotonic() >= deadline:
@@ -524,15 +517,20 @@ def go_wireless(adb, serial, state, label=None, port=DEFAULT_PORT):
     return payload
 
 
-def back_to_usb(adb, serial, devices, state, label=None):
-    """`adb -s SERIAL usb`: adbd listens on USB again and the Wi-Fi entry
-    drops. The selection moves to the one USB phone left, if there is one."""
+def back_to_usb(adb, target, devices, state):
+    """`adb -s SERIAL usb` on `target` (a device entry): adbd listens on USB
+    again and the Wi-Fi entry drops. When that Wi-Fi entry was the
+    selection it moves to the one USB phone left, or clears. Naming the
+    plugged entry itself leaves the selection alone: the phone is still on
+    the cable (before 1.3.2 `usb ""` with the USB phone selected cleared it
+    and the hub said No device)."""
+    serial = target["serial"]
     result = adb.run(["usb"], serial=serial, timeout=10, check=False)
     if result.code != 0 or "error" in result.stderr.lower():
         raise AdbError("adb_failed", f"adb usb failed: {fmt.clean(result.stderr or result.text.strip())}", result.stderr)
-    payload = {"notice": fmt.usb_notice(label or serial), "serial": serial}
-    if state.selected == serial:
-        usb = [d["serial"] for d in devices if d["kind"] == "usb" and d["serial"] != serial]
+    payload = {"notice": fmt.usb_notice(target.get("label") or serial), "serial": serial}
+    if target["kind"] == "wifi" and state.selected == serial:
+        usb = [d["serial"] for d in devices if d["kind"] == "usb"]
         fallback = usb[0] if len(usb) == 1 else None
         state.select(fallback)
         payload["selected"] = fallback

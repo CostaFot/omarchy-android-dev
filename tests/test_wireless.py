@@ -313,6 +313,26 @@ class GoWireless(FakeAdbCase):
         self.add_rules({"match": "devices -l", "stdout": HEADER + f"{SERIAL}          device product:sdk model:sdk device:emu transport_id:1\n"})
         self.assertEqual(self.run_cli("usb", SERIAL)["error"]["code"], "bad_args")
 
+    def test_usb_on_the_plugged_entry_keeps_the_selection(self):
+        # `usb` names the USB phone itself (or `usb ""` over IPC resolves to it): the phone is still
+        # on the cable, so the selection stays. Before 1.3.2 it was cleared and the hub said No device.
+        self.add_rules({"match": f"-s {USB} usb", "stdout": "restarting in USB mode\n"})
+        self.run_cli("select", USB)
+        for args in ((USB,), ()):
+            doc = self.run_cli("usb", *args)
+            self.assertTrue(doc["ok"], doc)
+            self.assertEqual(doc["notice"], f"Back to USB: Pixel 7 ({USB})")
+            self.assertEqual(doc["selected"], USB)
+            self.assertEqual([d["serial"] for d in doc["devices"]], [USB])
+            with open(os.path.join(self.state_dir, "state.json"), encoding="utf-8") as f:
+                self.assertEqual(json.load(f)["selected"], USB)
+        self.assertEqual(self.calls().count(["-s", USB, "usb"]), 2)
+        # A Wi-Fi entry that is not the selection moves nothing either.
+        self.add_rules({"match": "devices -l", "stdout": HEADER + PHONE_LINE + WIFI_LINE})
+        doc = self.run_cli("usb", WIFI)
+        self.assertTrue(doc["ok"], doc)
+        self.assertEqual(doc["selected"], USB)
+
 
 class Status(FakeAdbCase):
     def test_wireless_with_mdns(self):
@@ -447,28 +467,23 @@ class PairQr(FakeAdbCase):
         self.assertEqual(self.pngs(), [])
         self.assertEqual(self.wait_for_no_fake_adb().strip(), "")
 
-    def test_a_cancel_before_the_device_list_is_not_lost(self):
-        # The handlers go in before the server check and `devices -l`, so a `pair stop` while
-        # the helper is still listing devices ends the session: nothing printed, no PNG, no adb left.
-        self.add_rules({"match": "devices -l", "stdout": HEADER, "sleep": 5})
+    def test_a_cancel_before_the_mdns_check_is_not_lost(self):
+        # The handlers go in before the server check and the first adb call (`mdns check`), so a
+        # `pair stop` in those first moments ends the session: nothing printed, no PNG, no adb left.
+        self.add_rules({"match": "mdns check", "stdout": MDNS_OK, "sleep": 3})
         proc = self.start()
         for _ in range(50):
-            running = subprocess.run(["pgrep", "-af", r"^/usr/bin/python3 .*fakeadb\.py devices -l"], capture_output=True, text=True).stdout
+            running = subprocess.run(["pgrep", "-af", r"^/usr/bin/python3 .*fakeadb\.py mdns check"], capture_output=True, text=True).stdout
             if running.strip():
                 break
             time.sleep(0.1)
-        self.assertTrue(running.strip(), "the fake adb never started listing")
+        self.assertTrue(running.strip(), "the fake adb never started the mDNS check")
         proc.send_signal(signal.SIGINT)
         out, _ = proc.communicate(timeout=10)
         self.assertEqual(proc.returncode, 0)
         self.assertEqual(out, "")
         self.assertEqual(self.pngs(), [])
-        for _ in range(30):
-            left = subprocess.run(["pgrep", "-af", r"^/usr/bin/python3 .*fakeadb\.py devices -l"], capture_output=True, text=True).stdout
-            if not left.strip():
-                break
-            time.sleep(0.1)
-        self.assertEqual(left.strip(), "")
+        self.assertEqual(self.wait_for_no_fake_adb().strip(), "")
 
     def test_sigterm_does_the_same(self):
         proc = self.start()
@@ -536,6 +551,29 @@ class Direct(FakeAdbCase):
         self.assertEqual(wireless.wait_ready(adb, WIFI, budget=0.5), "offline")
         self.add_rules({"match": "get-state", "stdout": "device\n"})
         self.assertEqual(wireless.wait_ready(adb, WIFI, budget=0.5), "device")
+
+    def test_the_paired_entry_is_the_one_on_the_pairing_host(self):
+        # A second known phone whose Wireless debugging comes on during the wait is on another host
+        # and is never taken (before 1.3.2 the first new Wi-Fi entry anywhere was).
+        adb = Adb(FAKE_ADB, "override", None)
+        other = "192.168.1.9:5555      device product:oriole model:Pixel_6 device:oriole transport_id:6\n"
+        self.add_rules({"match": "devices -l", "stdout": HEADER + PHONE_LINE + other})
+        self.assertIsNone(wireless.wifi_device_on(adb, "192.168.1.5", budget=0.5))
+        self.assertEqual(wireless.wifi_device_on(adb, "192.168.1.9", budget=0.5)["serial"], "192.168.1.9:5555")
+        # An ip:port entry on the host is found at once, with its label and without mDNS.
+        self.add_rules({"match": "devices -l", "stdout": HEADER + other + WIFI_LINE})
+        found = wireless.wifi_device_on(adb, "192.168.1.5", budget=0.5)
+        self.assertEqual((found["serial"], found["label"]), (WIFI, f"Pixel 7 ({WIFI})"))
+        self.assertFalse(any("mdns services" in c for c in self.joined_calls()))
+        # An mDNS-named entry is placed by the host its connect service advertises.
+        self.add_rules({"match": "devices -l", "stdout": HEADER + other + MDNS_LINE},
+                       {"match": "mdns services", "stdout_file": "mdns_services.txt"})
+        self.assertEqual(wireless.wifi_device_on(adb, "192.168.1.5", budget=0.5)["serial"], MDNS_SERIAL)
+        self.assertIsNone(wireless.wifi_device_on(adb, "192.168.1.7", budget=0.5))
+        # An offline entry on the host is not ready, so it is not the phone yet.
+        self.add_rules({"match": "devices -l", "stdout": HEADER + WIFI_LINE.replace("device product", "offline product")})
+        self.assertIsNone(wireless.wifi_device_on(adb, "192.168.1.5", budget=0.5))
+        self.assertFalse(any("emu avd name" in c for c in self.joined_calls()))
 
     def test_mdns_available(self):
         adb = Adb(FAKE_ADB, "override", None)

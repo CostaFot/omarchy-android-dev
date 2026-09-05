@@ -47,7 +47,7 @@ Panel {
     else if (page === "toggles") store.refreshToggles()
     else if (page === "apks") { resetInstalls(); listApks() }
     else if (page === "tools") store.refreshTools()
-    else if (page === "wireless" || page === "paircode") store.refreshWireless()
+    else if (page === "wireless") store.refreshWireless()
     else store.refreshStatus()
   }
 
@@ -114,7 +114,7 @@ Panel {
       else if (entry.page === "toggles") store.refreshToggles()
       else if (entry.page === "apks") { resetInstalls(); listApks() }
       else if (entry.page === "tools") store.refreshTools()
-      else if (entry.page === "wireless" || entry.page === "paircode") store.refreshWireless()
+      else if (entry.page === "wireless") store.refreshWireless()
     }
     if (entry.page === "settings") loadPendingSettings()
     Qt.callLater(function() {
@@ -203,6 +203,9 @@ Panel {
     if (svc && svc.recording)
       out.push({ type: "note", urgent: true, icon: "\uf03d", label: "Recording · " + svc.elapsedText(svc.recordingSeconds),
                  detail: "Stop it on the Capture page" })
+    if (svc && svc.pairing)
+      out.push({ type: "note", urgent: true, icon: wirelessGlyphs.qr, label: "Pairing · " + Math.max(0, svc.pairingWindow - svc.pairingSeconds) + " s left",
+                 detail: "The QR code is on the Wireless page; cancel it there" })
     if (s.hasAdb && svc && svc.trackerError !== "" && svc.trackerErrorCode !== "no_adb")
       out.push({ type: "note", urgent: true, label: "Device tracking stopped", detail: svc.trackerError })
     if (s.lastError !== "" && s.lastErrorCode !== "no_adb" && s.notice === "")
@@ -646,7 +649,7 @@ Panel {
       var left = Math.max(0, svc.pairingWindow - svc.pairingSeconds)
       out.push({ type: "qr", path: svc.pairingQr, label: "Scan it from Developer options › Wireless debugging › Pair device with QR code",
                  detail: "Only from that screen: a camera app reads it as Wi-Fi credentials · " + left + " s left" })
-      out.push({ type: "action", icon: wirelessGlyphs.cancel, label: "Cancel pairing", detail: "Esc does too", action: "pairstop", urgent: true })
+      out.push({ type: "action", icon: wirelessGlyphs.cancel, label: "Cancel pairing", detail: "Esc only goes back; this ends the session", action: "pairstop", urgent: true })
     } else if (svc && svc.pairerRunning) {
       out.push({ type: "note", icon: wirelessGlyphs.qr, label: svc.pairingStopping ? "Cancelling…" : "Starting the pairing session…" })
     } else if (!w) {

@@ -502,9 +502,8 @@ def cmd_pair(ctx, args):
     address = wlmod.check_address(args[1])
     code = wlmod.read_code()
     adb = ctx.require_adb()
-    before = {d["serial"] for d in ctx.devices()}
     payload = wlmod.pair(adb, address, code)
-    payload.update(wlmod.finish_pairing(adb, ctx.state, before, address))
+    payload.update(wlmod.finish_pairing(adb, ctx.state, address))
     return _with_devices(ctx, payload, payload.get("serial"))
 
 
@@ -549,10 +548,9 @@ def cmd_usb(ctx, args):
     adb, target = _named_or_selected(ctx, args, "usb [SERIAL]")
     if target["kind"] == "emulator":
         raise AdbError("bad_args", f"{target['serial']} is an emulator")
-    payload = wlmod.back_to_usb(adb, target["serial"], ctx.devices(), ctx.state, target["label"])
-    ctx.explicit_serial = None
-    payload["devices"] = ctx.devices(refresh=True)
-    return payload
+    payload = wlmod.back_to_usb(adb, target, ctx.devices(), ctx.state)
+    ctx.explicit_serial = None  # the named entry may be gone from the list now
+    return _with_devices(ctx, payload, payload.get("selected"))
 
 
 def cmd_help(ctx, args):
@@ -636,13 +634,12 @@ def dispatch(argv, disarm):
         return None
     if command == "pair" and args == ["qr"]:
         disarm()  # waits for the phone to scan, two minutes at most
-        wlmod.arm_cancel()  # before the server check and the device list: an early cancel must land
+        wlmod.arm_cancel()  # before the server check and the mDNS check: an early cancel must land
         ctx = None
         try:
             ctx = Context(settings, serial)
             adb = ctx.require_adb()
-            devices = ctx.devices()
-            result = wlmod.pair_qr(adb, ctx.state, lambda p: emit(envelope("pair", ok=True, adb=ctx.adb_info(), selected=ctx.selected(), **p)), devices)
+            result = wlmod.pair_qr(adb, ctx.state, lambda p: emit(envelope("pair", ok=True, adb=ctx.adb_info(), selected=ctx.selected(), **p)))
             if result is not None:
                 emit(envelope("pair", ok=True, adb=ctx.adb_info(), selected=result.get("serial") or ctx.selected(), **result))
                 ctx.state.save()

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.2
+
+- Fixed: the *Cancel pairing* row said Escape cancels too. Escape goes back a page everywhere and left the session running: the QR code stayed on disk for up to two minutes and a phone that scanned it meanwhile was paired unwatched. The row says so now, and the hub shows *Pairing · N s left* while a session runs, pointing at the Wireless page, like it does for a recording.
+- Fixed: *Back to USB* on the plugged entry itself (and `usb ""` over IPC with the USB phone selected) cleared the selection, and the hub said *No device* with the phone still on the cable. Only a Wi-Fi entry's selection moves, to the one USB phone left.
+- Fixed: a pairing code could be dropped without a word. The store held one waiting request and the last one won, so a `pair code` queued behind the Wireless page's own read was replaced by an `r`, a middle click on the glyph or a `page wireless` over IPC: no notice, the phone's dialog timed out. Requests now wait in order: a read (status, devices, packages, a package, toggles, an APK listing, tools, wireless) replaces any read already waiting, an action never is; past eight waiting requests the newcomer is refused with a notice, and a run that hits its budget drops the queue behind it and says how many. The Pair with a code page no longer reads the network on entry or on `r`; it shows nothing from it.
+- Fixed: after a pairing, the first new Wi-Fi entry on any host was selected, so a second known phone whose Wireless debugging came on during the wait could be picked and named in the notice. The wait is for an entry on the pairing host (an `ip:port` serial by its host, an mDNS-named one by the host its connect service advertises), and the poll asks for no emulator labels. The QR session lists no devices before the scan; its cancel handlers are armed before the mDNS check, its first adb call.
+- README: the state directory no longer lists the recent Wi-Fi addresses, gone since 1.3.0; `wireless-qr.png` retaken with the new Cancel row.
+- Tests: 189.
+
 ## 1.3.1
 
 - Fixed: a phone adb connected to on its own after pairing was listed as plugged in. adb names that entry after the phone's mDNS service (`adb-<serialno>-<6 chars>._adb-tls-connect._tcp.`, no colon), and the plugin read the kind off the colon alone: the pairing notice named the address instead of the phone, nothing was selected, the Wireless page put the phone under *Plugged phones* with a Go wireless row and offered to connect to it again under *Seen on the network*, and the Tools row said over USB. The name is a Wi-Fi entry now; its service counts as attached; a pairing finds it by the host its service advertises; Disconnect takes the name (from the row and over IPC).

@@ -16,8 +16,9 @@ class Parsing(unittest.TestCase):
         t = toggles.states(raw)
         self.assertEqual({k: v["text"] for k, v in t.items()},
                          {"animations": "on", "touches": "off", "pointer": "off", "layout": "off",
-                          "airplane": "off", "wifi": "on", "data": "on", "bluetooth": "on"})
+                          "airplane": "off", "wifi": "on", "data": "on", "bluetooth": "on", "demo": "off"})
         self.assertEqual(t["bluetooth"]["label"], "Bluetooth")
+        self.assertEqual(t["demo"]["label"], "Demo mode")
         self.assertIs(t["touches"]["on"], False)
 
     def test_unknown_values_are_null_not_off(self):
@@ -25,6 +26,14 @@ class Parsing(unittest.TestCase):
         self.assertIsNone(t["wifi"]["on"])
         self.assertEqual(t["wifi"]["text"], "unknown")
         self.assertIs(t["animations"]["on"], False)
+
+    def test_demo_is_on_from_either_key_and_never_unknown(self):
+        # AOSP mirrors the shown state into sysui_tuner_demo_on; a vendor
+        # SystemUI may leave it at 0, so the gate the plugin sets counts too.
+        self.assertIs(toggles.states({"global:sysui_tuner_demo_on": "1"})["demo"]["on"], True)
+        self.assertIs(toggles.states({"global:sysui_demo_allowed": "1", "global:sysui_tuner_demo_on": "0"})["demo"]["on"], True)
+        self.assertIs(toggles.states({"global:sysui_demo_allowed": "0", "global:sysui_tuner_demo_on": "0"})["demo"]["on"], False)
+        self.assertIs(toggles.states({})["demo"]["on"], False)
 
 
 class Flipping(FakeAdbCase):
@@ -81,6 +90,31 @@ class Flipping(FakeAdbCase):
         toggles.flip(self.adb, SERIAL, "data", True)
         toggles.flip(self.adb, SERIAL, "bluetooth", False)
         self.assertEqual(self.writes(), [f"-s {SERIAL} shell svc wifi disable", f"-s {SERIAL} shell svc data enable", f"-s {SERIAL} shell svc bluetooth disable"])
+
+    def test_demo_on_opens_the_gate_and_sends_the_broadcasts(self):
+        doc = toggles.flip(self.adb, SERIAL, "demo")
+        self.assertEqual(doc["notice"], "Demo mode on")
+        b = f"-s {SERIAL} shell am broadcast -a com.android.systemui.demo -e command "
+        self.assertEqual(self.writes(), [
+            f"-s {SERIAL} shell settings put global sysui_demo_allowed 1",
+            b + "enter",
+            b + "clock -e hhmm 1200",
+            b + "notifications -e visible false",
+            b + "battery -e level 100 -e plugged false",
+            b + "network -e wifi show -e level 4",
+            b + "network -e mobile show -e datatype none -e level 4",
+            b + "status -e bluetooth hide -e mute hide",
+        ])
+
+    def test_demo_off_is_exit_then_the_gate_closed(self):
+        on = fixture("toggles_read.txt").replace("sysui_demo_allowed=null", "sysui_demo_allowed=1")
+        self.add_rules({"match": "echo api=", "stdout": on})
+        doc = toggles.flip(self.adb, SERIAL, "demo")
+        self.assertEqual(doc["notice"], "Demo mode off")
+        self.assertEqual(self.writes(), [
+            f"-s {SERIAL} shell am broadcast -a com.android.systemui.demo -e command exit",
+            f"-s {SERIAL} shell settings put global sysui_demo_allowed 0",
+        ])
 
     def test_unknown_toggle_and_failures(self):
         with self.assertRaises(AdbError) as cm:

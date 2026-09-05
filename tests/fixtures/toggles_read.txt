@@ -9,3 +9,5 @@ global:airplane_mode_on=0
 global:wifi_on=1
 global:mobile_data=1
 global:bluetooth_on=1
+global:sysui_demo_allowed=null
+global:sysui_tuner_demo_on=0

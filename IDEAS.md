@@ -17,7 +17,7 @@ Backlog, not commitments. Dead ideas stay here marked as such so they are not re
 ## The 1.x slots (each is an `androiddev` module, a panel page and IPC verbs)
 
 - **Forwarding**: `adb forward`/`reverse` list, add, remove. RN, Flutter and local-API work need it constantly; three adb calls.
-- **Tweaks**: dark mode (`cmd uimode night yes|no`), font scale, density and size overrides (`wm density`, `wm size`), locale, demo mode for clean status bars. Reads current state like Toggles; pairs with Capture.
+- **Tweaks**: dark mode (`cmd uimode night yes|no`), font scale, density and size overrides (`wm density`, `wm size`), locale. Reads current state like Toggles; pairs with Capture.
 - **Device info**: model, API level, battery (`dumpsys battery` `level:`), IP, screen (`wm size`), memory (`/proc/meminfo`), disk (`dumpsys diskstats` `Data-Free:`), Wi-Fi SSID and RSSI (`dumpsys wifi`), brightness (`settings get|put system screen_brightness`), foreground activity. One batch; hub header material.
 - **Wake and hardware keys**: `input keyevent KEYCODE_WAKEUP|BACK|HOME|APP_SWITCH|POWER|VOLUME_UP|VOLUME_DOWN` as a row group.
 - **Reboot**: normal, recovery, bootloader; `adb root`; `adb tcpip`. A stepping stone to wireless and fastboot.

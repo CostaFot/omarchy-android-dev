@@ -158,7 +158,7 @@ Panel {
   readonly property var pageRows: [
     { icon: "\uf00a", label: "Apps", detail: "Packages, their actions and deep links", page: "packages" },
     { icon: "\uf0c1", label: "Deep link", detail: "Open a URL on the device", page: "deeplink" },
-    { icon: "\uf1de", label: "Toggles", detail: "Animations, touches, layout bounds, airplane, Wi-Fi, data, Bluetooth", page: "toggles" },
+    { icon: "\uf1de", label: "Toggles", detail: "Animations, touches, layout bounds, airplane, Wi-Fi, data, Bluetooth, demo mode", page: "toggles" },
     { icon: "\uf030", label: "Capture", detail: "Screenshot and screen recording", page: "capture" },
     { icon: "\uf1b2", label: "APKs", detail: "Install from a folder", page: "apks" },
     { icon: "\uf11c", label: "Send text", detail: "Type text or the clipboard on the device", page: "text" },
@@ -374,9 +374,10 @@ Panel {
     return out
   }
 
-  // The eight developer toggles, in the Windows order plus Bluetooth; the
+  // The nine developer toggles, in the Windows order plus Bluetooth and
+  // SystemUI's demo mode; the
   // state word comes from the helper, the command text is a literal.
-  readonly property var toggleOrder: ["animations", "touches", "pointer", "layout", "airplane", "wifi", "data", "bluetooth"]
+  readonly property var toggleOrder: ["animations", "touches", "pointer", "layout", "airplane", "wifi", "data", "bluetooth", "demo"]
   readonly property var toggleCommands: ({
     animations: "settings put global *_animation_scale 0|1",
     touches: "settings put system show_touches",
@@ -385,7 +386,8 @@ Panel {
     airplane: "cmd connectivity airplane-mode (settings put + broadcast before API 30)",
     wifi: "svc wifi enable|disable",
     data: "svc data enable|disable",
-    bluetooth: "svc bluetooth enable|disable"
+    bluetooth: "svc bluetooth enable|disable",
+    demo: "am broadcast systemui.demo enter|exit"
   })
 
   function toggleRows() {

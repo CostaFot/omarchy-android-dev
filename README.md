@@ -46,9 +46,9 @@ It opens on a hub: the selected device with its state, then the pages. Every pag
 
 **Deep link** takes a URL or a custom scheme; Enter fires it (`am start -a android.intent.action.VIEW -d URL`). The last ten are listed under *Recent* and fire again with Enter. From a package's actions page the link is scoped to that package, so an ambiguous scheme lands in the right app.
 
-<img src="assets/screenshots/toggles.png" width="300" alt="the eight developer toggles with their state">
+<img src="assets/screenshots/toggles.png" width="300" alt="the nine developer toggles with their state">
 
-**Toggles** are Animations, Show touches, Pointer location, Layout bounds, Airplane mode, Wi-Fi, Mobile data and Bluetooth, each with its current state read from the device in one call. Enter flips one and every row repaints from the answer. Each row names the adb command behind it.
+**Toggles** are Animations, Show touches, Pointer location, Layout bounds, Airplane mode, Wi-Fi, Mobile data, Bluetooth and Demo mode, each with its current state read from the device in one call. Enter flips one and every row repaints from the answer. Each row names the adb command behind it. Demo mode is Android's clean status bar for screenshots and recordings: the clock at 12:00, a full battery and full signal, no notification icons. Vendor skins honour it in part; an HONOR phone on Android 16 took the battery and the notification icons but kept its real clock and signal bars.
 
 <p>
 <img src="assets/screenshots/capture.png" width="300" alt="the capture page">
@@ -112,7 +112,7 @@ omarchy-shell costafot.android-dev select emulator-5554
 omarchy-shell costafot.android-dev page packages # open the panel on a page: hub, devices, packages, deeplink, toggles, capture, apks, text, tools, settings
 omarchy-shell costafot.android-dev launch com.android.chrome   # forcestop and clear take a package too
 omarchy-shell costafot.android-dev deeplink https://example.com
-omarchy-shell costafot.android-dev flip touches  # animations, touches, pointer, layout, airplane, wifi, data, bluetooth
+omarchy-shell costafot.android-dev flip touches  # animations, touches, pointer, layout, airplane, wifi, data, bluetooth, demo
 omarchy-shell costafot.android-dev record start  # stop pulls the mp4 into ~/Videos; toggle does either
 omarchy-shell costafot.android-dev text "hello world"          # typed into the focused field; clipboard sends the clipboard
 omarchy-shell costafot.android-dev scrcpy                      # mirror the selected device
@@ -167,7 +167,7 @@ bin/omarchy-android-dev app launch com.android.chrome | jq .notice       # resta
 bin/omarchy-android-dev perms grant com.android.chrome | jq .notice      # or revoke
 bin/omarchy-android-dev deeplink https://example.com | jq .notice
 bin/omarchy-android-dev toggles | jq '.toggles | map_values(.text)'
-bin/omarchy-android-dev toggle touches | jq .notice                     # animations, touches, pointer, layout, airplane, wifi, data, bluetooth
+bin/omarchy-android-dev toggle touches | jq .notice                     # animations, touches, pointer, layout, airplane, wifi, data, bluetooth, demo
 bin/omarchy-android-dev screenshot | jq .path                           # saved, on the clipboard, with a notification
 bin/omarchy-android-dev record                                          # records until Ctrl-C, then prints the mp4's path
 bin/omarchy-android-dev select emulator-5554 | jq .notice               # with more than one device attached; --serial S does it per call

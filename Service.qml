@@ -356,7 +356,7 @@ Item {
     return "requested"
   }
 
-  readonly property var toggleNames: ["animations", "touches", "pointer", "layout", "airplane", "wifi", "data", "bluetooth"]
+  readonly property var toggleNames: ["animations", "touches", "pointer", "layout", "airplane", "wifi", "data", "bluetooth", "demo"]
 
   // A package name as the IPC verbs accept it; the helper checks again.
   function validPackage(pkg) {
@@ -455,7 +455,7 @@ Item {
     "  deeplink URL         am start -a VIEW -d URL",
     "  screenshot           screenshot of the selected device: file, clipboard, notification",
     "  record start|stop|toggle  screen recording of the selected device; stop pulls the mp4 to the videos folder",
-    "  flip NAME            flip a developer toggle: animations touches pointer layout airplane wifi data bluetooth",
+    "  flip NAME            flip a developer toggle: animations touches pointer layout airplane wifi data bluetooth demo",
     "  text TEXT            type TEXT on the selected device (input text: one line of ASCII)",
     "  clipboard            type the clipboard (wl-paste) on the selected device",
     "  scrcpy               mirror the selected device with scrcpy",

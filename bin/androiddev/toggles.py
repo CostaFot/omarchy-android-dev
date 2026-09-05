@@ -1,5 +1,6 @@
-"""The eight developer toggles: read all in one `adb shell`, flip one with
-the Windows commands verbatim (plus pointer location and Bluetooth).
+"""The nine developer toggles: read all in one `adb shell`, flip one with
+the Windows commands verbatim (plus pointer location, Bluetooth and
+SystemUI's demo mode).
 
 The read is a single fixed shell script (no device data in it), so the
 Toggles page costs one round trip instead of ten.
@@ -8,7 +9,7 @@ Toggles page costs one round trip instead of ten.
 from . import fmt
 from .adb import AdbError
 
-NAMES = ("animations", "touches", "pointer", "layout", "airplane", "wifi", "data", "bluetooth")
+NAMES = ("animations", "touches", "pointer", "layout", "airplane", "wifi", "data", "bluetooth", "demo")
 
 LABELS = {
     "animations": "Animations",
@@ -19,13 +20,34 @@ LABELS = {
     "wifi": "Wi-Fi",
     "data": "Mobile data",
     "bluetooth": "Bluetooth",
+    "demo": "Demo mode",
 }
 
 _KEYS = (
     "global:window_animation_scale", "global:transition_animation_scale", "global:animator_duration_scale",
     "system:show_touches", "system:pointer_location", "global:airplane_mode_on",
     "global:wifi_on", "global:mobile_data", "global:bluetooth_on",
+    "global:sysui_demo_allowed", "global:sysui_tuner_demo_on",
 )
+
+# SystemUI's demo mode (Developer options > System UI demo mode): the status
+# bar with a fixed clock, a full battery and full signal, no notification
+# icons; what store screenshots are taken with. `sysui_demo_allowed` is the
+# gate, and every command is one broadcast to SystemUI. AOSP mirrors the
+# shown state into `sysui_tuner_demo_on`; a vendor SystemUI may not (an HONOR
+# phone on Android 16 keeps it at 0), so the plugin reads "on" from either
+# key and clears the gate on exit, which makes its own flips read back right.
+DEMO_ACTION = "com.android.systemui.demo"
+DEMO_ENTER = (
+    ("enter",),
+    ("clock", "-e", "hhmm", "1200"),
+    ("notifications", "-e", "visible", "false"),
+    ("battery", "-e", "level", "100", "-e", "plugged", "false"),
+    ("network", "-e", "wifi", "show", "-e", "level", "4"),
+    ("network", "-e", "mobile", "show", "-e", "datatype", "none", "-e", "level", "4"),
+    ("status", "-e", "bluetooth", "hide", "-e", "mute", "hide"),
+)
+DEMO_EXIT = (("exit",),)
 
 READ_SCRIPT = (
     'echo api=$(getprop ro.build.version.sdk); echo layout=$(getprop debug.layout); '
@@ -74,6 +96,8 @@ def states(raw):
         "wifi": _is_on(raw.get("global:wifi_on")),
         "data": _is_on(raw.get("global:mobile_data")),
         "bluetooth": _is_on(raw.get("global:bluetooth_on")),
+        "demo": bool(_is_on(raw.get("global:sysui_tuner_demo_on"), default=False)
+                     or _is_on(raw.get("global:sysui_demo_allowed"), default=False)),
     }
     return {name: {"on": on[name], "text": fmt.on_off(on[name]), "label": LABELS[name]} for name in NAMES}
 
@@ -92,6 +116,10 @@ def read_all(adb, serial):
 
 def _put(adb, serial, namespace, key, value):
     adb.shell(serial, "settings", "put", namespace, key, value)
+
+
+def _demo(adb, serial, command):
+    adb.shell(serial, "am", "broadcast", "-a", DEMO_ACTION, "-e", "command", *command)
 
 
 def flip(adb, serial, name, want=None):
@@ -127,6 +155,15 @@ def flip(adb, serial, name, want=None):
             adb.shell(serial, "svc", "data", "enable" if target else "disable")
         elif name == "bluetooth":
             adb.shell(serial, "svc", "bluetooth", "enable" if target else "disable")
+        elif name == "demo":
+            if target:
+                _put(adb, serial, "global", "sysui_demo_allowed", "1")
+                for command in DEMO_ENTER:
+                    _demo(adb, serial, command)
+            else:
+                for command in DEMO_EXIT:
+                    _demo(adb, serial, command)
+                _put(adb, serial, "global", "sysui_demo_allowed", "0")
     except AdbError as e:
         raise AdbError(e.code, f"Failed to set {label.lower()}: {e.message}", e.stderr) from e
     after = read_all(adb, serial)

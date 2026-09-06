@@ -1,5 +1,7 @@
 # Ideas
 
+Every live idea below is an issue on the board (https://www.costafotiadis.com/board/, COS-77 to COS-105, imported 2026-09-06). A new idea gets an issue when it is added here; a shipped one gets its issue completed. Dead ideas have none.
+
 Backlog, not commitments. Dead ideas stay here marked as such so they are not re-pitched. The 1.0 roadmap itself is in `AGENTS.md`; this is what comes after it, or what was left out on purpose.
 
 ## From the Windows wishlist and the scaffold's open questions

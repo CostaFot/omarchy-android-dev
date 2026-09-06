@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.4.1
+
+The smaller findings of the 1.2.0 review (board issue COS-98).
+
+- Fixed: the QR page rebuilt every row once a second and re-read the code's PNG with it, 120 times a session; the same for the hub's *Recording* and *Pairing* notes and the Capture page's *Stop recording* row. The counters are bound in the rows now and the model stays still; the PNG is loaded off the UI thread, once.
+- Fixed: a `record stop` sent while the helper was still listing devices was dropped and the recording went on (the shell starts the helper with SIGINT ignored; the handlers went in only when screenrecord did). They are armed first now, as `pair qr`'s have been since 1.3.1; a stop that lands before screenrecord starts ends the run quietly.
+- Fixed: the code step of *Pair with a code* is its own page. Escape or Backspace go back to the addresses with the typed one restored, instead of dropping the whole page and the address with it.
+- Fixed: the QR session's `paired` line went out before the state was saved and carried no device list, so the tracker's next frame could move the selection back for a moment; it is written like `pair code`'s answer now, the state first and the fresh list riding along, and a state file that cannot be written is reported instead of swallowed.
+- Fixed: `--serial X usb Y` reported the state's selection instead of X; the commands no longer rewrite the `--serial` flag.
+- Fixed: a `pair code` typed at a terminal waited a full minute for the digits under the helper's 60 s budget, so nobody typing answered *ran out of time*; the wait is cut to fit the budget and the answer is *no code*.
+- Fixed: a connect or a pairing re-read the Wireless page three or four times in a row (its own answer, then every tracker frame); one read after the burst.
+- Changed: an address is at most 255 characters (the host 249), inside the 256-character field rule.
+- Internal: the recorder and the pairer in `Service.qml` are one `StreamSession` component instantiated twice; they had started to drift.
+- Not done, on purpose: `mdns check` and `mdns services` stay two calls in a row on every paint. Running them together would call `mdns services` against an adb that just said it has no mDNS or just failed, which 1.3.3 rules out, and a cache would need a state field keyed on the binary for a few tens of milliseconds.
+- Tests: 200.
+
 ## 1.4.0
 
 - Changed: *Go wireless* and *Back to USB* have left the Wireless page, and the `tcpip` and `usb` verbs the IPC surface. Pairing by QR code or by code covers what they did: a paired phone connects on its own whenever its Wireless debugging is on, with no cable-first step, no `adb tcpip` that a reboot undoes and no dead `ip:port` entry to clean up after. The *Plugged phones* section went with them. The helper keeps `tcpip` and `usb` for the terminal, unchanged.

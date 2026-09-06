@@ -50,6 +50,31 @@ class Parsing(unittest.TestCase):
         with self.assertRaises(Exception) as cm:
             wireless.check_address("nope nope")
         self.assertIn("ip:port", cm.exception.message)
+        # The 256-character field rule holds for the whole address (host 249 + `:65535`).
+        self.assertEqual(wireless.valid_address("h" * 249 + ":65535"), "h" * 249 + ":65535")
+        self.assertIsNone(wireless.valid_address("h" * 250 + ":65535"))
+        self.assertLessEqual(len(wireless.valid_address("h" * 249 + ":65535")), 255)
+
+    def test_the_terminal_wait_for_the_code_fits_the_budget(self):
+        # On a tty `read_code` prompts and waits, but never past the run's alarm: a full minute under
+        # the 60 s budget answered `timeout` instead of "no code". A code typed in time is read as is.
+        master, slave = os.openpty()
+        stream = os.fdopen(slave, "rb", buffering=0)
+        old = signal.signal(signal.SIGALRM, lambda *a: None)
+        signal.setitimer(signal.ITIMER_REAL, 8)
+        try:
+            started = time.monotonic()
+            with self.assertRaises(AdbError) as cm:
+                wireless.read_code(stream)
+            self.assertEqual(cm.exception.code, "bad_args")
+            self.assertLess(time.monotonic() - started, 6)
+            os.write(master, b"123456\n")
+            self.assertEqual(wireless.read_code(stream), "123456")
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, old)
+            stream.close()
+            os.close(master)
 
     def test_mdns_services(self):
         rows = wireless.parse_mdns_services(fixture("mdns_services.txt"))
@@ -319,6 +344,17 @@ class GoWireless(FakeAdbCase):
         self.add_rules({"match": "devices -l", "stdout": HEADER + f"{SERIAL}          device product:sdk model:sdk device:emu transport_id:1\n"})
         self.assertEqual(self.run_cli("usb", SERIAL)["error"]["code"], "bad_args")
 
+    def test_serial_on_the_command_line_stays_the_reported_selection(self):
+        # `--serial X usb Y`: X is this run's device, whatever `usb` did to Y (before 1.4.1 the
+        # command overwrote the flag and reported the state's selection instead).
+        self.add_rules({"match": "devices -l", "stdout": HEADER + PHONE_LINE + WIFI_LINE})
+        doc = self.run_cli("--serial", USB, "usb", WIFI)
+        self.assertTrue(doc["ok"], doc)
+        self.assertEqual(doc["disconnected"], [WIFI])
+        self.assertEqual(doc["selected"], USB)
+        self.assertEqual([d["serial"] for d in doc["devices"] if d["selected"]], [USB])
+        self.assertFalse(os.path.exists(os.path.join(self.state_dir, "state.json")))  # nothing was selected for good
+
     def test_usb_on_the_plugged_entry_keeps_the_selection(self):
         # `usb` names the USB phone itself (or `usb ""` over IPC resolves to it): the phone is still
         # on the cable, so the selection stays. Before 1.3.2 it was cleared and the hub said No device.
@@ -530,6 +566,11 @@ class PairQr(FakeAdbCase):
                        {"match": f"pair {PAIR_ADDR}", "stdin": True, "stdout": PAIRED},
                        {"match": "devices -l", "stdout": HEADER + WIFI_LINE})
         final = json.loads(proc.stdout.readline())
+        # The state is saved before the line goes out (the tracker's next frame reads it), and the
+        # fresh device list rides along like `pair code`'s.
+        with open(os.path.join(self.state_dir, "state.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["selected"], WIFI)
+        self.assertIn(WIFI, [d["serial"] for d in final["devices"]])
         proc.wait(timeout=15)
         self.assertEqual(proc.returncode, 0)
         self.assertEqual(final["event"], "paired")

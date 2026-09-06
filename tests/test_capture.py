@@ -159,6 +159,24 @@ class Recording(FakeAdbCase):
         self.assertEqual(final["event"], "recorded")
         self.assertTrue(os.path.exists(final["path"]))
 
+    def test_a_stop_before_screenrecord_starts_is_not_lost(self):
+        # The handlers go in before the device lookup (the helper starts with SIGINT ignored under
+        # the shell), so a `record stop` while `devices -l` is still running ends the run: nothing
+        # printed, no screenrecord started, exit 0.
+        self.add_rules({"match": "devices -l", "stdout_file": "devices_l.txt", "sleep": 3})
+        proc = self.start()
+        for _ in range(50):
+            running = subprocess.run(["pgrep", "-af", r"^/usr/bin/python3 .*fakeadb\.py devices -l"], capture_output=True, text=True).stdout
+            if running.strip():
+                break
+            time.sleep(0.1)
+        self.assertTrue(running.strip(), "the fake adb never started listing devices")
+        proc.send_signal(signal.SIGINT)
+        out, _ = proc.communicate(timeout=10)
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(out, "")
+        self.assertFalse(any("screenrecord" in c for c in self.joined_calls()))
+
     def test_helper_killed_outright_takes_screenrecord_with_it(self):
         # The shell ends a Process it no longer wants with SIGKILL; the adb
         # child still goes (PDEATHSIG). The device file is the documented leftover.

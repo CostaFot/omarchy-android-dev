@@ -53,9 +53,11 @@ NEW_DEVICE_WAIT = 8.0     # a paired phone shows up in `devices -l` within this
 MDNS_POLL = 1.0
 PAIR_WINDOW = 120         # seconds the code stays up
 CODE_WAIT = 5.0           # how long `pair code` waits for the code on a pipe
+TTY_CODE_WAIT = 60.0      # and on a terminal, cut to fit the run's budget
 
 CODE_RE = re.compile(r"^\d{6}$")
-HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$")
+# A host of at most 249 characters: with `:65535` the address stays under the 256-character field rule.
+HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,248}$")
 _GUID_RE = re.compile(r"\[guid=([^\]]+)\]")
 _INET_RE = re.compile(r"\binet (\d{1,3}(?:\.\d{1,3}){3})/")
 
@@ -254,8 +256,12 @@ def read_code(stream=None, wait=CODE_WAIT):
     if tty:
         sys.stderr.write("Enter the 6-digit pairing code: ")
         sys.stderr.flush()
+        # A minute, but inside the run's budget: a full minute under the 60 s alarm answered
+        # `timeout` instead of "no code" when nobody typed.
+        left = time_left()
+        wait = TTY_CODE_WAIT if left is None else max(1.0, min(TTY_CODE_WAIT, left - 5))
     try:
-        ready, _, _ = select.select([stream], [], [], 60 if tty else wait)
+        ready, _, _ = select.select([stream], [], [], wait)
     except (OSError, ValueError):
         ready = [stream]
     raw = b""

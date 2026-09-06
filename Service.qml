@@ -172,44 +172,130 @@ Item {
     reportedUnauthorized = seen
   }
 
+  // ---- Streaming sessions --------------------------------------------------
+  // The recorder and the pairer are one machine (before 1.4.1 two copies
+  // that had started to drift): a helper process that streams one event
+  // once it is going (`recording`, `pairing`), then one final document, or
+  // nothing at all (a cancelled `pair qr` prints nothing by design). A stop
+  // is SIGINT to it (`proc.signal(2)`, what Ctrl-C does). The final document
+  // goes through the store like any other run, so its notice, device list
+  // and error are the panel's. `active` holds from the event to the end,
+  // `seconds` counts from the event, and the 300 ms exit fallback tells a
+  // silent end (`endedSilently`, with whether a stop was asked for) from a
+  // last line still on its way. One session of each kind per shell.
+  component StreamSession: QtObject {
+    id: session
+    property var args: []          // the helper command after --settings
+    property string eventName: ""  // the streamed event
+    property bool active: false
+    property bool stopping: false
+    property double startedAt: 0
+    property int seconds: 0
+    readonly property bool running: proc.running
+    signal streamed(var ev)
+    signal finished(var doc)
+    signal endedSilently(bool wasStopping)
+    signal ended()
+
+    function start() {
+      if (proc.running) return false
+      active = false
+      stopping = false
+      seconds = 0
+      proc.command = ["/bin/sh", "-c", 'exec "$0" "$@"', "/usr/bin/python3",
+                      root.pluginDir + "/bin/omarchy-android-dev", "--settings", root.store.settingsJson].concat(args)
+      proc.running = true
+      return true
+    }
+
+    function stop() {
+      if (!proc.running) return false
+      stopping = true
+      proc.signal(2)
+      return true
+    }
+
+    function apply(line) {
+      var text = String(line || "").trim()
+      if (text === "" || text.length > 65536) return
+      var ev
+      try {
+        ev = JSON.parse(text)
+      } catch (e) {
+        return
+      }
+      if (!ev || typeof ev !== "object") return
+      if (ev.event === eventName) {
+        startedAt = Date.now()
+        seconds = 0
+        active = true
+        streamed(ev)
+        return
+      }
+      active = false
+      finished(root.store.handle(text))
+    }
+
+    property Process proc: Process {
+      stdout: SplitParser {
+        onRead: function(line) { session.apply(line) }
+      }
+      onRunningChanged: {
+        if (running) return
+        // The final line may still be on its way; decide after a moment.
+        session.exitFallback.restart()
+      }
+    }
+
+    property Timer exitFallback: Timer {
+      interval: 300
+      repeat: false
+      onTriggered: {
+        if (session.active) {
+          session.active = false
+          session.endedSilently(session.stopping)
+        }
+        session.stopping = false
+        session.ended()
+      }
+    }
+
+    property Timer ticker: Timer {
+      interval: 1000
+      repeat: true
+      running: session.active
+      onTriggered: session.seconds = Math.floor((Date.now() - session.startedAt) / 1000)
+    }
+  }
+
   // ---- The recorder --------------------------------------------------------
-  // `record` runs screenrecord on the device and streams a `recording`
-  // event once it is going, then one final document (`recorded`, or an
-  // `error`) when it ends: on SIGINT from here (`recorder.signal(2)`, what
-  // Ctrl-C does in a terminal) or on screenrecord's own 3 minute limit.
-  // The helper pulls the mp4, removes the device copy and sends the
-  // notification itself; the final document goes through the store like
-  // any other, so the panel shows the notice. One recording per shell.
-  property bool recording: false
-  property bool recordingStopping: false
-  property double recordingStartedAt: 0
-  property int recordingSeconds: 0
+  // `record` runs screenrecord on the device and ends on `record stop` or on
+  // screenrecord's own 3 minute limit; the helper pulls the mp4, removes the
+  // device copy and sends the notification itself (a failure gets one here).
+  readonly property bool recording: recorder.active
+  readonly property bool recordingStopping: recorder.stopping
+  readonly property int recordingSeconds: recorder.seconds
   property string recordingDevicePath: ""
   readonly property bool recorderRunning: recorder.running
 
-  function recorderCommand() {
-    return ["/bin/sh", "-c", 'exec "$0" "$@"', "/usr/bin/python3",
-            pluginDir + "/bin/omarchy-android-dev", "--settings", store.settingsJson, "record"]
+  StreamSession {
+    id: recorder
+    args: ["record"]
+    eventName: "recording"
+    onStreamed: function(ev) { root.recordingDevicePath = String(ev.device_path || "") }
+    onFinished: function(doc) {
+      if (doc && doc.ok === false && root.store.notifyEnabled) {
+        var dev = root.store.selectedDevice
+        root.notify(root.store.lastError !== "" ? root.store.lastError : "The recording failed", dev ? dev.label : "")
+      }
+    }
+    // A recording always prints its last line: a silent end could not start, or was killed.
+    onEndedSilently: function(wasStopping) { root.store.showNotice("The recording ended without an answer", true) }
+    onEnded: root.recordingDevicePath = ""
   }
 
-  function startRecording() {
-    if (recorder.running) return "already recording"
-    recording = false
-    recordingStopping = false
-    recordingSeconds = 0
-    recordingDevicePath = ""
-    recorder.command = recorderCommand()
-    recorder.running = true
-    return "requested"
-  }
-
-  function stopRecording() {
-    if (!recorder.running) return "not recording"
-    recordingStopping = true
-    recorder.signal(2)  // SIGINT: the helper ends adb, pulls the file and answers
-    return "stopping"
-  }
-
+  function startRecording() { return recorder.start() ? "requested" : "already recording" }
+  function stopRecording() { return recorder.stop() ? "stopping" : "not recording" }
   function toggleRecording() { return recorder.running ? stopRecording() : startRecording() }
 
   function elapsedText(seconds) {
@@ -218,173 +304,43 @@ Item {
     return Math.floor(s / 60) + ":" + (r < 10 ? "0" : "") + r
   }
 
-  function applyRecorderLine(line) {
-    var text = String(line || "").trim()
-    if (text === "" || text.length > 65536) return
-    var ev
-    try {
-      ev = JSON.parse(text)
-    } catch (e) {
-      return
-    }
-    if (!ev || typeof ev !== "object") return
-    if (ev.event === "recording") {
-      recording = true
-      recordingStartedAt = Date.now()
-      recordingSeconds = 0
-      recordingDevicePath = String(ev.device_path || "")
-      return
-    }
-    // The final document (`recorded` or `error`): merged like any other,
-    // so the notice and lastError are the panel's; the helper sent its
-    // own notification for a saved file, a failure gets one here.
-    recording = false
-    var doc = store.handle(text)
-    if (doc && doc.ok === false && store.notifyEnabled) {
-      var dev = store.selectedDevice
-      notify(store.lastError !== "" ? store.lastError : "The recording failed", dev ? dev.label : "")
-    }
-  }
-
-  Process {
-    id: recorder
-    stdout: SplitParser {
-      onRead: function(line) { root.applyRecorderLine(line) }
-    }
-    onRunningChanged: {
-      if (running) return
-      // The final line may still be on its way; decide after a moment.
-      recorderExitFallback.restart()
-    }
-  }
-
-  Timer {
-    id: recorderExitFallback
-    interval: 300
-    repeat: false
-    onTriggered: {
-      if (root.recording) {
-        // Ended without a final document: could not start, or was killed.
-        root.recording = false
-        root.store.showNotice("The recording ended without an answer", true)
-      }
-      root.recordingStopping = false
-      root.recordingDevicePath = ""
-    }
-  }
-
-  Timer {
-    interval: 1000
-    repeat: true
-    running: root.recording
-    onTriggered: root.recordingSeconds = Math.floor((Date.now() - root.recordingStartedAt) / 1000)
-  }
-
   // ---- The pairer ----------------------------------------------------------
-  // `pair qr` writes a pairing code as a PNG, streams one `pairing` event
+  // `pair qr` writes a pairing code as a PNG, streams the `pairing` event
   // naming it, then waits (two minutes at most) for the phone to scan it
-  // from its Wireless debugging screen and pairs; the final document
-  // (`paired`, or an `error`) goes through the store like any other. A
-  // cancel (`pairer.signal(2)`, what Ctrl-C does) removes the PNG and
-  // prints nothing, so "Pairing cancelled" is said here. One session per shell.
-  property bool pairing: false
-  property bool pairingStopping: false
+  // from its Wireless debugging screen and pairs. A cancel removes the PNG
+  // and prints nothing, so "Pairing cancelled" is said here.
+  readonly property bool pairing: pairer.active
+  readonly property bool pairingStopping: pairer.stopping
   property string pairingQr: ""
   property string pairingName: ""
   property int pairingWindow: 120
-  property double pairingStartedAt: 0
-  property int pairingSeconds: 0
+  readonly property int pairingSeconds: pairer.seconds
   readonly property bool pairerRunning: pairer.running
 
-  function pairerCommand() {
-    return ["/bin/sh", "-c", 'exec "$0" "$@"', "/usr/bin/python3",
-            pluginDir + "/bin/omarchy-android-dev", "--settings", store.settingsJson, "pair", "qr"]
-  }
-
-  function startPairing() {
-    if (pairer.running) return "already pairing"
-    pairing = false
-    pairingStopping = false
-    pairingQr = ""
-    pairingName = ""
-    pairingSeconds = 0
-    pairer.command = pairerCommand()
-    pairer.running = true
-    return "requested"
-  }
-
-  function stopPairing() {
-    if (!pairer.running) return "not pairing"
-    pairingStopping = true
-    pairer.signal(2)  // SIGINT: the helper removes the PNG and exits quietly
-    return "stopping"
-  }
-
-  function togglePairing() { return pairer.running ? stopPairing() : startPairing() }
-
-  function applyPairerLine(line) {
-    var text = String(line || "").trim()
-    if (text === "" || text.length > 65536) return
-    var ev
-    try {
-      ev = JSON.parse(text)
-    } catch (e) {
-      return
-    }
-    if (!ev || typeof ev !== "object") return
-    if (ev.event === "pairing") {
-      pairingQr = String(ev.qr_path || "")
-      pairingName = String(ev.name || "")
-      pairingWindow = Number(ev.seconds) > 0 ? Number(ev.seconds) : 120
-      pairingStartedAt = Date.now()
-      pairingSeconds = 0
-      pairing = true
-      return
-    }
-    // The final document (`paired` or `error`): merged like any other, so
-    // the notice, the new device list and lastError are the panel's.
-    pairing = false
-    pairingQr = ""
-    var doc = store.handle(text)
-    if (!store.notifyEnabled) return
-    if (doc && doc.ok !== false && doc.notice) notify(String(doc.notice), String(doc.address || ""))
-    else if (store.lastError !== "") notify(store.lastError, "")
-  }
-
-  Process {
+  StreamSession {
     id: pairer
-    stdout: SplitParser {
-      onRead: function(line) { root.applyPairerLine(line) }
+    args: ["pair", "qr"]
+    eventName: "pairing"
+    onStreamed: function(ev) {
+      root.pairingQr = String(ev.qr_path || "")
+      root.pairingName = String(ev.name || "")
+      root.pairingWindow = Number(ev.seconds) > 0 ? Number(ev.seconds) : 120
     }
-    onRunningChanged: {
-      if (running) return
-      pairerExitFallback.restart()
-    }
-  }
-
-  Timer {
-    id: pairerExitFallback
-    interval: 300
-    repeat: false
-    onTriggered: {
-      if (root.pairing) {
-        // Ended without a final document: cancelled (nothing is printed
-        // then, by design), could not start, or was killed.
-        root.pairing = false
-        root.store.showNotice(root.pairingStopping ? "Pairing cancelled" : "The pairing session ended without an answer", !root.pairingStopping)
-      }
-      root.pairingStopping = false
+    onFinished: function(doc) {
       root.pairingQr = ""
-      root.pairingName = ""
+      if (!root.store.notifyEnabled) return
+      if (doc && doc.ok !== false && doc.notice) root.notify(String(doc.notice), String(doc.address || ""))
+      else if (root.store.lastError !== "") root.notify(root.store.lastError, "")
     }
+    onEndedSilently: function(wasStopping) {
+      root.store.showNotice(wasStopping ? "Pairing cancelled" : "The pairing session ended without an answer", !wasStopping)
+    }
+    onEnded: { root.pairingQr = ""; root.pairingName = "" }
   }
 
-  Timer {
-    interval: 1000
-    repeat: true
-    running: root.pairing
-    onTriggered: root.pairingSeconds = Math.floor((Date.now() - root.pairingStartedAt) / 1000)
-  }
+  function startPairing() { return pairer.start() ? "requested" : "already pairing" }
+  function stopPairing() { return pairer.stop() ? "stopping" : "not pairing" }
+  function togglePairing() { return pairer.running ? stopPairing() : startPairing() }
 
   // omarchy-notification-send as argv, fire and forget. Device labels are
   // one argument each, never a shell string.
@@ -439,8 +395,8 @@ Item {
   Component.onDestruction: {
     stopping = true
     stopTracker()
-    if (recorder.running) recorder.signal(2)
-    if (pairer.running) pairer.signal(2)
+    recorder.stop()
+    pairer.stop()
     if (store.proc.running) store.proc.signal(15)
   }
 

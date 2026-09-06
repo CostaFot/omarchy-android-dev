@@ -47,7 +47,7 @@ Panel {
     else if (page === "toggles") store.refreshToggles()
     else if (page === "apks") { resetInstalls(); listApks() }
     else if (page === "tools") store.refreshTools()
-    else if (page === "wireless" || page === "paircode") store.refreshWireless()
+    else if (page === "wireless" || (page === "paircode" && !current.addr)) store.refreshWireless()
     else store.refreshStatus()
   }
 
@@ -114,7 +114,7 @@ Panel {
       else if (entry.page === "toggles") store.refreshToggles()
       else if (entry.page === "apks") { resetInstalls(); listApks() }
       else if (entry.page === "tools") store.refreshTools()
-      else if (entry.page === "wireless" || entry.page === "paircode") store.refreshWireless()
+      else if (entry.page === "wireless" || (entry.page === "paircode" && !entry.addr)) store.refreshWireless()
     }
     if (entry.page === "settings") loadPendingSettings()
     Qt.callLater(function() {
@@ -135,6 +135,13 @@ Panel {
   // shows is either a literal here or a field the helper already formatted;
   // the exceptions are the uninstall and stop questions and the "Pairing
   // with" note, literals around a name or an address.
+  // The two running counters are read by the delegates, never by `rows`
+  // (a row says `live: "countdown"` or `live: "elapsed"` and the delegate
+  // appends the figure): before 1.4.1 the seconds were baked into the
+  // model, so every tick rebuilt every row and re-read the QR PNG.
+  readonly property int pairingLeft: service && service.pairing ? Math.max(0, service.pairingWindow - service.pairingSeconds) : 0
+  readonly property string recordingElapsed: service && service.recording ? service.elapsedText(service.recordingSeconds) : ""
+
   readonly property var rows: {
     var out = []
     if (!isHub) out.push({ type: "title", label: page === "actions" ? (current.pkg || "") : (pageTitles[page] || page) })
@@ -201,10 +208,10 @@ Panel {
                  page: "devices" })
     }
     if (svc && svc.recording)
-      out.push({ type: "note", urgent: true, icon: "\uf03d", label: "Recording · " + svc.elapsedText(svc.recordingSeconds),
+      out.push({ type: "note", urgent: true, icon: "\uf03d", label: "Recording", live: "elapsed",
                  detail: "Stop it on the Capture page" })
     if (svc && svc.pairing)
-      out.push({ type: "note", urgent: true, icon: wirelessGlyphs.qr, label: "Pairing · " + Math.max(0, svc.pairingWindow - svc.pairingSeconds) + " s left",
+      out.push({ type: "note", urgent: true, icon: wirelessGlyphs.qr, label: "Pairing", live: "countdown",
                  detail: "The QR code is on the Wireless page; cancel it there" })
     if (s.hasAdb && svc && svc.trackerError !== "" && svc.trackerErrorCode !== "no_adb")
       out.push({ type: "note", urgent: true, label: "Device tracking stopped", detail: svc.trackerError })
@@ -433,8 +440,8 @@ Panel {
     if (svc && svc.recordingStopping) {
       out.push({ type: "note", icon: "\uf03d", label: "Saving the recording…", detail: "Pulling the mp4 from the device" })
     } else if (svc && svc.recording) {
-      out.push({ type: "action", icon: "\uf04d", label: "Stop recording", urgent: true,
-                 detail: "Recording · " + svc.elapsedText(svc.recordingSeconds) + " · Enter stops and saves the mp4", action: "record" })
+      out.push({ type: "action", icon: "\uf04d", label: "Stop recording", urgent: true, live: "elapsed",
+                 detail: "Enter stops and saves the mp4", action: "record" })
     } else if (svc && svc.recorderRunning) {
       out.push({ type: "note", icon: "\uf03d", label: "Starting the recording…" })
     }
@@ -648,9 +655,8 @@ Panel {
     }
     var w = s.wirelessInfo
     if (svc && svc.pairing) {
-      var left = Math.max(0, svc.pairingWindow - svc.pairingSeconds)
       out.push({ type: "qr", path: svc.pairingQr, label: "Scan it from Developer options › Wireless debugging › Pair device with QR code",
-                 detail: "Only from that screen: a camera app reads it as Wi-Fi credentials · " + left + " s left" })
+                 detail: "Only from that screen: a camera app reads it as Wi-Fi credentials", live: "countdown" })
       out.push({ type: "action", icon: wirelessGlyphs.cancel, label: "Cancel pairing", detail: "Esc only goes back; this ends the session", action: "pairstop", urgent: true })
     } else if (svc && svc.pairerRunning) {
       out.push({ type: "note", icon: wirelessGlyphs.qr, label: svc.pairingStopping ? "Cancelling…" : "Starting the pairing session…" })
@@ -693,7 +699,8 @@ Panel {
   }
 
   // Step one takes the pairing address, step two the code; `current.addr`
-  // tells them apart. While the phone's pairing dialog is open it advertises
+  // tells them apart (the code step is its own stack entry, so Esc and
+  // Backspace go back to the addresses with the typed one restored). While the phone's pairing dialog is open it advertises
   // the pairing address on mDNS (`_adb-tls-pairing._tcp`), so the addresses
   // seen are rows and typing one is the fallback; six digits typed there are
   // the code in the wrong box (seen 2026-09-07) and are refused. The code
@@ -1020,11 +1027,6 @@ Panel {
     else if (store) store.run(args, onDone, stdinText)
   }
 
-  // Patch the top stack entry in place (the pairing page keeps its address there).
-  function setCurrent(patch) {
-    stack = stack.slice(0, -1).concat([Object.assign({}, current, patch)])
-  }
-
   // Pop until `name` is the page (or the hub is reached).
   function popTo(name) {
     while (stack.length > 1 && page !== name) {
@@ -1043,7 +1045,7 @@ Panel {
     else if (row.action === "pairstop") { if (service && typeof service.stopPairing === "function") service.stopPairing() }
     else if (row.action === "pairaddr") {
       if (/^\d{6}$/.test(row.addr)) { if (store) store.showNotice("That is the code: the pairing address (ip:port) comes first", true); return }
-      setCurrent({ addr: row.addr }); filterField.text = ""
+      push({ page: "paircode", addr: row.addr })  // its own step: Esc goes back to the addresses
     }
     else if (row.action === "paircode") {
       if (!/^\d{6}$/.test(row.code)) { if (store) store.showNotice("The pairing code is six digits", true); return }
@@ -1127,14 +1129,24 @@ Panel {
       if (!root.opened) return
       if (root.page === "tools") root.store.refreshTools()
       // A Wi-Fi entry joining or dropping repaints the lists and re-reads the services.
-      else if (root.page === "wireless") root.store.refreshWireless()
+      else if (root.page === "wireless") wirelessRefresh.restart()
     }
   }
 
   // A pairing session ending (paired, cancelled, failed) re-reads the page.
   Connections {
     target: root.service
-    function onPairingChanged() { if (root.opened && root.page === "wireless" && !root.service.pairing) root.store.refreshWireless() }
+    function onPairingChanged() { if (root.opened && root.page === "wireless" && !root.service.pairing) wirelessRefresh.restart() }
+  }
+
+  // One read for a burst: a connect or a pairing answers with the device
+  // list and the tracker frames it again right after, each a change. Before
+  // 1.4.1 that was three or four `wireless` runs.
+  Timer {
+    id: wirelessRefresh
+    interval: 300
+    repeat: false
+    onTriggered: if (root.opened && root.page === "wireless") root.store.refreshWireless()
   }
 
   onOpenedChanged: {
@@ -1278,6 +1290,9 @@ Panel {
                 required property int index
 
                 readonly property string kind: modelData.type
+                // The running figure for a `live` row: a count, appended to a literal.
+                readonly property string live: modelData.live === "countdown" ? root.pairingLeft + " s left"
+                  : modelData.live === "elapsed" ? root.recordingElapsed : ""
                 readonly property bool isAction: kind === "action"
                 readonly property bool isTitle: kind === "title"
                 readonly property bool hasCursor: isAction && index === root.selectedIndex
@@ -1363,7 +1378,7 @@ Panel {
                   Text {
                     width: parent.width
                     textFormat: Text.PlainText
-                    text: (rowItem.modelData.icon ? rowItem.modelData.icon + "  " : "") + (rowItem.modelData.label || "")
+                    text: (rowItem.modelData.icon ? rowItem.modelData.icon + "  " : "") + (rowItem.modelData.label || "") + (rowItem.live ? " · " + rowItem.live : "")
                     color: rowItem.modelData.urgent ? root.urgentForeground : root.contentForeground
                     font.family: root.contentFontFamily
                     font.pixelSize: Style.font.body
@@ -1385,7 +1400,9 @@ Panel {
                 // The pairing code: the PNG the helper wrote (0600, in the
                 // state dir, gone when the session ends) on a white card, the
                 // instruction under it. Re-read every time (`cache: false`):
-                // the path repeats across sessions of one helper pid.
+                // the path repeats across sessions of one helper pid. Loaded
+                // off the UI thread, once per session: the row is static and
+                // the countdown is bound below, not in the model.
                 Column {
                   id: qrColumn
                   visible: rowItem.kind === "qr"
@@ -1406,7 +1423,7 @@ Panel {
                       anchors.margins: Style.space(6)
                       source: rowItem.kind === "qr" && rowItem.modelData.path ? Util.fileUrl(String(rowItem.modelData.path)) : ""
                       cache: false
-                      asynchronous: false
+                      asynchronous: true
                       smooth: false
                       fillMode: Image.PreserveAspectFit
                     }
@@ -1427,7 +1444,7 @@ Panel {
                     visible: rowItem.kind === "qr" && !!rowItem.modelData.detail
                     width: parent.width
                     textFormat: Text.PlainText
-                    text: rowItem.kind === "qr" ? (rowItem.modelData.detail || "") : ""
+                    text: rowItem.kind === "qr" ? (rowItem.modelData.detail || "") + (rowItem.live ? " · " + rowItem.live : "") : ""
                     color: root.urgentForeground
                     font.family: root.contentFontFamily
                     font.pixelSize: Style.font.caption
@@ -1502,7 +1519,7 @@ Panel {
                         visible: rowItem.twoLine
                         width: parent.width
                         textFormat: Text.PlainText
-                        text: rowItem.modelData.detail || ""
+                        text: (rowItem.live ? rowItem.live + " · " : "") + (rowItem.modelData.detail || "")
                         color: root.mutedForeground
                         font.family: root.contentFontFamily
                         font.pixelSize: Style.font.caption

@@ -183,39 +183,55 @@ def wait_for_file(adb, serial, path, budget=SETTLE_SECONDS):
     return last
 
 
+# The one recording this helper runs: `stopping` once SIGINT or SIGTERM
+# arrived, `proc` the adb client once it is started.
+_session = {"stopping": False, "proc": None}
+
+
+def _on_stop(signum, frame):
+    # Ending the adb client (SIGTERM; the shell's children inherit an
+    # ignored SIGINT) closes its connection; adbd hangs up the remote
+    # shell and screenrecord, which handles SIGHUP, finishes the file.
+    _session["stopping"] = True
+    proc = _session["proc"]
+    if proc is not None:
+        try:
+            proc.terminate()
+        except OSError:
+            pass
+
+
+def arm_stop():
+    """The recorder's stop: SIGINT or SIGTERM end the recording, and this
+    helper dies with its parent. `dispatch` calls it before the device
+    lookup, not just `record`: the shell starts the helper with SIGINT
+    ignored, so until a handler is in place a `record stop` while the
+    helper was still listing devices was simply dropped and the recording
+    went on (the same window `pair qr` had, closed in 1.3.1). Idempotent."""
+    die_with_parent()  # a killed shell must not leave this helper behind
+    signal.signal(signal.SIGTERM, _on_stop)
+    signal.signal(signal.SIGINT, _on_stop)
+
+
 def record(adb, serial, settings, emit, device_label=None):
     """Stream: one `recording` event once screenrecord is running, then the
     final `recorded` document (or raises AdbError) when the recording ends,
-    by signal or by screenrecord's own time limit (180 s by default)."""
-    die_with_parent()  # a killed shell must not leave this helper behind
+    by signal or by screenrecord's own time limit (180 s by default). None
+    when the stop came before screenrecord was started: nothing to pull,
+    nothing to say."""
+    arm_stop()  # dispatch armed it already; a direct caller gets it here
+    if _session["stopping"]:
+        return None
     directory = recording_dir(settings)
     _ensure_dir(directory)
     stamp = time.strftime("%Y-%m-%d_%H-%M-%S")
     device_path = f"{DEVICE_RECORD_DIR}/omarchy-android-dev-{stamp}.mp4"
-    stopping = {"flag": False}
-    child = {}
-
-    def on_signal(signum, frame):
-        # Ending the adb client (SIGTERM; the shell's children inherit an
-        # ignored SIGINT) closes its connection; adbd hangs up the remote
-        # shell and screenrecord, which handles SIGHUP, finishes the file.
-        stopping["flag"] = True
-        proc = child.get("proc")
-        if proc is not None:
-            try:
-                proc.terminate()
-            except OSError:
-                pass
-
-    # Installed before the child starts, so a signal in the first moments
-    # is not lost and the child does not inherit a handler.
-    signal.signal(signal.SIGTERM, on_signal)
-    signal.signal(signal.SIGINT, on_signal)
+    stopping = _session
     proc = adb.popen(["shell", "screenrecord", device_path], serial=serial)
-    child["proc"] = proc
+    _session["proc"] = proc
     started = time.time()
-    if stopping["flag"]:
-        on_signal(None, None)
+    if stopping["stopping"]:
+        _on_stop(None, None)
     out = {"data": bytearray(), "truncated": False}
     err = {"data": bytearray(), "truncated": False}
     threading.Thread(target=_pump, args=(proc.stdout, fmt.CAP_DEFAULT, out, proc), daemon=True).start()
@@ -249,7 +265,7 @@ def record(adb, serial, settings, emit, device_label=None):
     seconds = max(0, int(time.time() - started))
     stderr = fmt.clean(bytes(err["data"]).decode("utf-8", errors="replace").strip(), 512)
     stdout = fmt.clean(bytes(out["data"]).decode("utf-8", errors="replace").strip(), 512)
-    if not stopping["flag"] and proc.returncode != 0:
+    if not stopping["stopping"] and proc.returncode != 0:
         raise AdbError("adb_failed", "screenrecord failed" + (f": {stderr or stdout}" if stderr or stdout else f" (exit {proc.returncode})"), stderr)
     size_on_device = wait_for_file(adb, serial, device_path)
     if not size_on_device:

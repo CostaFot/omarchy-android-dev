@@ -213,10 +213,14 @@ class Context:
         self.adb.ensure_server()
         return self.adb
 
-    def devices(self, refresh=False):
+    def devices(self, refresh=False, selected=None):
+        """The device list, marked with `selected` when given (a command that
+        just moved the selection), else with the resolved one."""
         if self._devices is None or refresh:
             self._devices = devmod.list_devices(self.require_adb())
-            devmod.mark_selected(self._devices, self.selected())
+            devmod.mark_selected(self._devices, selected or self.selected())
+        elif selected:
+            devmod.mark_selected(self._devices, selected)
         return self._devices
 
     def selected(self):
@@ -228,10 +232,12 @@ class Context:
         except AdbError:
             return None
 
-    def device(self):
-        """(adb, serial) for a device command, or raises no_device / many_devices / unauthorized / offline."""
+    def device(self, serial=None):
+        """(adb, serial) for a device command, or raises no_device / many_devices / unauthorized / offline.
+        `serial` is one named on the command line (`usb SERIAL`), ahead of `--serial`; `explicit_serial`
+        itself is never rewritten (a `--serial X usb Y` used to report Y's fate as X's selection)."""
         adb = self.require_adb()
-        serial = devmod.resolve_serial(self.devices(), self.explicit_serial, self.state.selected)
+        serial = devmod.resolve_serial(self.devices(), serial or self.explicit_serial, self.state.selected)
         devmod.require_ready(self.devices(), serial)
         return adb, serial
 
@@ -282,7 +288,6 @@ def cmd_select(ctx, args):
         raise AdbError("no_device", f"Device {serial} is not attached")
     ctx.state.select(serial)
     devmod.mark_selected(devices, serial)
-    ctx.explicit_serial = serial
     label = next((d["label"] for d in devices if d["serial"] == serial), serial)
     return {"devices": devices, "selected": serial, "notice": f"Selected {label}"}
 
@@ -362,7 +367,9 @@ def cmd_record(ctx, args, emit_doc):
     def send(payload):
         emit_doc(envelope("record", ok=True, adb=ctx.adb_info(), selected=serial, **payload))
 
-    send(capture.record(adb, serial, ctx.settings, send, device_label=label))
+    final = capture.record(adb, serial, ctx.settings, send, device_label=label)
+    if final is not None:  # None: stopped before screenrecord started; nothing to say
+        send(final)
 
 
 def cmd_toggles(ctx, args):
@@ -490,10 +497,12 @@ def cmd_wireless(ctx, args):
 
 def _with_devices(ctx, payload, selected=None):
     """The fresh device list rides in the answer (the store replaces its
-    own from it, ahead of the tracker's next frame)."""
+    own from it, ahead of the tracker's next frame); `selected` is the
+    serial the command just moved the selection to, marked in the list and
+    reported as `selected`."""
+    payload["devices"] = ctx.devices(refresh=True, selected=selected)
     if selected:
-        ctx.explicit_serial = selected
-    payload["devices"] = ctx.devices(refresh=True)
+        payload.setdefault("selected", selected)
     return payload
 
 
@@ -531,9 +540,7 @@ def _named_or_selected(ctx, args, usage):
     """The serial on the command line, else the resolved one; the device must be ready."""
     if len(args) > 1 or (args and not devmod.valid_serial(args[0])):
         raise BadArgs(usage)
-    if args:
-        ctx.explicit_serial = args[0]
-    adb, serial = ctx.device()
+    adb, serial = ctx.device(serial=args[0] if args else None)
     target = next(d for d in ctx.devices() if d["serial"] == serial)
     return adb, target
 
@@ -551,7 +558,6 @@ def cmd_usb(ctx, args):
     if target["kind"] == "emulator":
         raise AdbError("bad_args", f"{target['serial']} is an emulator")
     payload = wlmod.back_to_usb(adb, target, ctx.devices(), ctx.state)
-    ctx.explicit_serial = None  # the named entry may be gone from the list now
     return _with_devices(ctx, payload, payload.get("selected"))
 
 
@@ -628,6 +634,7 @@ def dispatch(argv, disarm):
         return None
     if command == "record":
         disarm()  # runs until the recording ends, minutes at most
+        capture.arm_stop()  # before the device lookup: a `record stop` in the first moments must land
         ctx = Context(settings, serial)
         try:
             cmd_record(ctx, args, emit)
@@ -643,14 +650,18 @@ def dispatch(argv, disarm):
             adb = ctx.require_adb()
             result = wlmod.pair_qr(adb, ctx.state, lambda p: emit(envelope("pair", ok=True, adb=ctx.adb_info(), selected=ctx.selected(), **p)))
             if result is not None:
-                emit(envelope("pair", ok=True, adb=ctx.adb_info(), selected=result.get("serial") or ctx.selected(), **result))
-                ctx.state.save()
+                # Like `pair code`: the state saved first (the tracker's next frame reads it and
+                # would otherwise move the selection back for a moment) and the fresh list riding
+                # along; a state file that cannot be written is `state_corrupt` in the envelope.
+                try:
+                    _with_devices(ctx, result, result.get("serial"))
+                except AdbError:
+                    pass  # the pairing is done; the tracker's next frame has the list
+                emit(_finish(ctx, "pair", result))
         except AdbError as e:
             emit(envelope("pair", ok=False, error=e.to_dict(), adb=ctx.adb_info() if ctx else None, event="error"))
         except wlmod.Cancelled:
             pass
-        except OSError:
-            pass  # the state file could not be written; the pairing itself is done
         return None
     handler = COMMANDS.get(command)
     if handler is None:

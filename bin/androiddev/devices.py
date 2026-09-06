@@ -93,7 +93,11 @@ def list_devices(adb, with_labels=True):
         if with_labels and d["kind"] == "emulator" and d["state"] == "device":
             avd = avd_name(adb, d["serial"])
         d["avd"] = avd
-        d["label"] = fmt.device_label(d["serial"], d["model"], avd)
+        # The entry adb makes for an auto-connected phone carries the whole mDNS name
+        # (`adb-<serialno>-<6 chars>._adb-tls-connect._tcp.`), which filled the hub's row;
+        # the label shows the instance, what `mdns services` lists the phone under. The
+        # serial stays what `-s` takes.
+        d["label"] = fmt.device_label(mdns_instance(d["serial"]) or d["serial"], d["model"], avd)
         d["detail"] = fmt.device_detail(d["kind"], d["state"])
     return devices
 

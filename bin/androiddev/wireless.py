@@ -20,6 +20,14 @@ Four ways onto Wi-Fi, all of them adb's own:
   `adb tcpip 5555` over USB, the phone's Wi-Fi address from `ip route`,
   connect, select the Wi-Fi entry. `usb` puts adbd back on USB.
 
+A VPN that isolates the LAN looks like a dead phone (seen 2026-09-05:
+NordVPN with LAN Discovery off dropped every packet to the phone and the
+helper saw only timeouts). `vpn_interfaces` reads /sys/class/net for a
+tunnel interface that is up (wireguard, tun, ppp: no hardware address
+type), the page's document says so, and a timed-out connect or pairing
+names it. Presence is a hint, not a verdict: a VPN that lets the LAN
+through is fine and the note is not urgent.
+
 The QR payload (`WIFI:T:ADB;S:<name>;P:<password>;;`) is a Wi-Fi
 credential string by format: a camera app that reads it will try to join
 a network that does not exist, which is why the page says where to scan
@@ -55,11 +63,18 @@ PAIR_WINDOW = 120         # seconds the code stays up
 CODE_WAIT = 5.0           # how long `pair code` waits for the code on a pipe
 TTY_CODE_WAIT = 60.0      # and on a terminal, cut to fit the run's budget
 
+NET_DIR = "/sys/class/net"     # OMARCHY_ANDROID_DEV_NET_DIR in tests
+ARPHRD_NONE = 65534           # wireguard, tun, tailscale: no link-layer address type
+ARPHRD_PPP = 512
+IFF_UP = 0x1
+MAX_VPN_INTERFACES = 8
+
 CODE_RE = re.compile(r"^\d{6}$")
 # A host of at most 249 characters: with `:65535` the address stays under the 256-character field rule.
 HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,248}$")
 _GUID_RE = re.compile(r"\[guid=([^\]]+)\]")
 _INET_RE = re.compile(r"\binet (\d{1,3}(?:\.\d{1,3}){3})/")
+_IFACE_RE = re.compile(r"^[A-Za-z0-9._@:-]{1,32}$")   # a Linux interface name (15 chars; room to spare)
 
 
 class Cancelled(BaseException):
@@ -111,6 +126,49 @@ def check_target(text):
 def valid_code(text):
     s = str(text or "").strip()
     return s if CODE_RE.match(s) else None
+
+
+# ---- a VPN in the way -------------------------------------------------------------
+
+def _sysfs_int(path, base=10):
+    try:
+        with open(path, "r", encoding="ascii") as f:
+            return int(f.read(32).strip(), base)
+    except (OSError, ValueError):
+        return None
+
+
+def vpn_interfaces(root=None):
+    """The names of the tunnel interfaces that are up: `type` 65534
+    (ARPHRD_NONE: wireguard, tun, tailscale) or 512 (ppp) with IFF_UP in
+    `flags`. Sorted, at most MAX_VPN_INTERFACES. Nothing is spawned; an
+    unreadable sysfs is no VPN."""
+    root = root or os.environ.get("OMARCHY_ANDROID_DEV_NET_DIR") or NET_DIR
+    try:
+        names = sorted(os.listdir(root))
+    except OSError:
+        return []
+    out = []
+    for name in names:
+        if name == "lo" or not _IFACE_RE.match(name):
+            continue
+        kind = _sysfs_int(os.path.join(root, name, "type"))
+        flags = _sysfs_int(os.path.join(root, name, "flags"), 16)
+        if kind in (ARPHRD_NONE, ARPHRD_PPP) and flags is not None and flags & IFF_UP:
+            out.append(fmt.clean(name, 32))
+    return fmt.cap_list(out, MAX_VPN_INTERFACES)
+
+
+def vpn_info(interfaces=None):
+    """The `vpn` field of the page's document."""
+    names = vpn_interfaces() if interfaces is None else list(interfaces)
+    return {"up": bool(names), "interfaces": names, "label": fmt.vpn_label(names) if names else None,
+            "text": fmt.VPN_TEXT if names else None}
+
+
+def with_vpn_hint(message):
+    """`message`, with the VPN hint appended while a tunnel is up."""
+    return fmt.clean(message, 512) + fmt.vpn_hint(vpn_interfaces())
 
 
 # ---- mDNS ------------------------------------------------------------------------
@@ -219,10 +277,15 @@ def wait_ready(adb, serial, budget=STATE_WAIT):
 
 
 def connect(adb, address):
-    result = adb.run(["connect", address], timeout=CONNECT_TIMEOUT, check=False)
+    try:
+        result = adb.run(["connect", address], timeout=CONNECT_TIMEOUT, check=False)
+    except AdbError as e:
+        if e.code == "timeout":
+            raise AdbError("timeout", with_vpn_hint(e.message), e.stderr) from e
+        raise
     ok, text = classify_connect(result)
     if not ok:
-        raise AdbError("adb_failed", f"adb connect: {text}", result.stderr)
+        raise AdbError("adb_failed", with_vpn_hint(f"adb connect: {text}"), result.stderr)
     ready = wait_ready(adb, address)
     if ready != "device":
         if "unauthorized" in ready:
@@ -236,7 +299,8 @@ def disconnect(adb, address):
     text = " ".join(result.lines()).strip() or result.stderr
     if result.code != 0 and "no such device" not in text.lower():
         raise AdbError("adb_failed", f"adb disconnect: {fmt.clean(text)}", result.stderr)
-    return {"notice": fmt.disconnected_notice(address), "address": address}
+    # An auto-connected phone's name is shown as its instance, like its label.
+    return {"notice": fmt.disconnected_notice(devmod.mdns_instance(address) or address), "address": address}
 
 
 # ---- pairing -------------------------------------------------------------------------
@@ -308,11 +372,16 @@ def pair(adb, address, code, pdeathsig=False):
     fd = _piped((code + "\n").encode("ascii"))
     try:
         result = adb.run(["pair", address], timeout=PAIR_TIMEOUT, check=False, stdin=fd, pdeathsig=pdeathsig)
+    except AdbError as e:
+        if e.code == "timeout":
+            raise AdbError("timeout", with_vpn_hint(e.message), e.stderr) from e
+        raise
     finally:
         os.close(fd)
     ok, text, guid = classify_pair(result)
     if not ok:
-        raise AdbError("adb_failed", text, result.stderr)
+        # A wrong code means the phone was reached; anything else may be the network.
+        raise AdbError("adb_failed", text if "wrong code" in text else with_vpn_hint(text), result.stderr)
     return {"address": address, "guid": guid, "pair_text": text}
 
 
@@ -465,7 +534,9 @@ def pair_qr(adb, state, emit):
                     payload["event"] = "paired"
                     return payload
             if time.monotonic() >= deadline:
-                raise AdbError("timeout", f"Nobody scanned the code within {fmt.window_text(window)}")
+                # The phone advertises the pairing service over multicast; a VPN that isolates the
+                # LAN drops that too, and a scanned code then looks like nobody scanning.
+                raise AdbError("timeout", with_vpn_hint(f"Nobody scanned the code within {fmt.window_text(window)}"))
             time.sleep(MDNS_POLL)
     except Cancelled:
         return None
@@ -607,6 +678,7 @@ def describe(adb, state, devices):
         "wifi_devices": [d for d in devices if d["kind"] == "wifi"],
         "usb_devices": [d for d in devices if d["kind"] == "usb"],
         "qrencode": toolsmod.tool(toolsmod.qrencode_path()),
+        "vpn": vpn_info(),
         "port": DEFAULT_PORT,
         "pair_seconds": pair_window(),
     }

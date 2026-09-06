@@ -76,6 +76,9 @@ class FakeAdbCase(unittest.TestCase):
         self.script = os.path.join(self.tmp.name, "rules.json")
         self.recorder_log = os.path.join(self.tmp.name, "recorder.log")
         self.recorder = os.path.join(self.tmp.name, "recorder.py")
+        # An empty /sys/class/net stand-in: the developer's own VPN must not colour a test.
+        self.net_dir = os.path.join(self.tmp.name, "net")
+        os.mkdir(self.net_dir)
         with open(self.recorder, "w", encoding="utf-8") as f:
             f.write(RECORDER)
         os.chmod(self.recorder, 0o700)
@@ -98,6 +101,7 @@ class FakeAdbCase(unittest.TestCase):
             "OMARCHY_ANDROID_DEV_WL_PASTE": "/nonexistent",
             "OMARCHY_ANDROID_DEV_QRENCODE": "/nonexistent",
             "OMARCHY_ANDROID_DEV_LAUNCHER": "",
+            "OMARCHY_ANDROID_DEV_NET_DIR": self.net_dir,
         }
         cleared = ["ANDROID_HOME", "ANDROID_SDK_ROOT", "OMARCHY_ANDROID_DEV_DEBUG", "OMARCHY_ANDROID_DEV_TOTAL_BUDGET",
                    "OMARCHY_ANDROID_DEV_PAIR_SECONDS", "XDG_PICTURES_DIR", "XDG_VIDEOS_DIR"]
@@ -113,6 +117,16 @@ class FakeAdbCase(unittest.TestCase):
             else:
                 os.environ[k] = v
         self.tmp.cleanup()
+
+    def interface(self, name, kind=1, up=True):
+        """An entry in the fake /sys/class/net: `type` (1 ethernet, 65534 a
+        tunnel, 512 ppp) and `flags` with IFF_UP or not."""
+        d = os.path.join(self.net_dir, name)
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "type"), "w", encoding="ascii") as f:
+            f.write(f"{kind}\n")
+        with open(os.path.join(d, "flags"), "w", encoding="ascii") as f:
+            f.write(f"0x{(0x1003 if up else 0x1002):x}\n")
 
     def rules(self, rules):
         with open(self.script, "w", encoding="utf-8") as f:

@@ -37,8 +37,8 @@ Panel {
   // nf-fa-android, as an escape so no tool can strip it silently.
   readonly property string glyph: "\uf17b"
   readonly property var kindGlyphs: ({ emulator: "\uf108", usb: "\uf10b", wifi: "\uf1eb" })
-  // The Wireless page's glyphs (nf-fa qrcode, key, link, times, plug, usb), as escapes.
-  readonly property var wirelessGlyphs: ({ qr: "\uf029", key: "\uf084", link: "\uf0c1", cancel: "\uf00d" })
+  // The Wireless page's glyphs (nf-fa qrcode, key, link, times, shield), as escapes.
+  readonly property var wirelessGlyphs: ({ qr: "\uf029", key: "\uf084", link: "\uf0c1", cancel: "\uf00d", vpn: "\uf132" })
 
   function refresh() {
     if (!store) return
@@ -695,6 +695,12 @@ Panel {
                    action: "connect", addr: sv.address })
       }
     }
+    // A tunnel interface up on this machine (the helper read /sys/class/net):
+    // the usual reason nothing on Wi-Fi ever answers is a VPN isolating the
+    // LAN, so the page says one is up. Not urgent: a VPN that lets the LAN
+    // through is fine. The label and the text are the helper's.
+    if (w && w.vpn && w.vpn.up)
+      out.push({ type: "note", icon: wirelessGlyphs.vpn, label: w.vpn.label || "A VPN is up", detail: w.vpn.text || "" })
     return out
   }
 

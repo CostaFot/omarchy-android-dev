@@ -63,6 +63,9 @@ class Parsing(unittest.TestCase):
         self.assertEqual(fmt.device_label(SERIAL, "sdk_gphone16k_x86_64", "Pixel_10_Pro_Fold"), "Pixel 10 Pro Fold (emulator-5554)")
         self.assertEqual(fmt.device_label("ZY22", "Pixel_7_Pro", None), "Pixel 7 Pro (ZY22)")
         self.assertEqual(fmt.device_label("ZY22", "", None), "ZY22")
+        # An auto-connected phone is labelled by its mDNS instance, not the whole service name.
+        mdns = "adb-ZY22ABC-xyMD0H._adb-tls-connect._tcp."
+        self.assertEqual(fmt.device_label(devmod.mdns_instance(mdns) or mdns, "Pixel_7", None), "Pixel 7 (adb-ZY22ABC-xyMD0H)")
         self.assertEqual(fmt.device_detail("emulator", "device"), "Emulator · ready")
         self.assertEqual(fmt.device_detail("usb", "unauthorized"), "USB · needs authorising: accept the prompt on the device")
         self.assertEqual(fmt.device_detail("wifi", "offline"), "Wi-Fi · offline")

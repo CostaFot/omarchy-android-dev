@@ -117,6 +117,24 @@ MDNS_MISSING_TEXT = ("This adb has no mDNS (the android-tools one does not): pai
 QR_SCAN_TEXT = "Scan it from Developer options › Wireless debugging › Pair device with QR code"
 QR_WARNING_TEXT = "Only from that screen: a camera app reads this code as Wi-Fi credentials and can knock the phone off its network"
 SERVICE_TEXT = {"pairing": "Pairing", "connect": "Wireless debugging"}
+VPN_TEXT = ("If nothing on Wi-Fi ever answers, it may be isolating the LAN: let LAN traffic through "
+            "(NordVPN: LAN Discovery) or disconnect it while pairing")
+
+
+def vpn_label(interfaces):
+    """`A VPN is up: nordlynx`: the Wireless page's note while a tunnel
+    interface is up on this machine."""
+    names = ", ".join(clean(n, 32) for n in interfaces)
+    return f"A VPN is up: {names}" if names else "A VPN is up"
+
+
+def vpn_hint(interfaces):
+    """What a timed-out connect or pairing gets appended while a tunnel
+    interface is up: the phone may be fine and the VPN in the way."""
+    if not interfaces:
+        return ""
+    names = ", ".join(clean(n, 32) for n in interfaces)
+    return f" · a VPN is up ({names}); if it isolates the LAN, nothing here reaches the phone"
 
 
 def service_detail(kind, address):

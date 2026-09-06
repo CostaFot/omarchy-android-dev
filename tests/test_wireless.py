@@ -23,6 +23,7 @@ PHONE_LINE = f"{USB}               device product:cheetah model:Pixel_7 device:c
 WIFI_LINE = f"{WIFI}      device product:cheetah model:Pixel_7 device:cheetah transport_id:4\n"
 # The entry adb's server makes on its own for a paired phone: the mDNS instance and service, no colon.
 MDNS_SERIAL = "adb-ZY22ABCDEF-xyMD0H._adb-tls-connect._tcp."
+MDNS_INSTANCE = "adb-ZY22ABCDEF-xyMD0H"
 MDNS_LINE = f"{MDNS_SERIAL}      device product:cheetah model:Pixel_7 device:cheetah transport_id:5\n"
 HEADER = "List of devices attached\n"
 MDNS_OK = "mdns daemon version [adb discovery 0.0.0]\n"
@@ -174,6 +175,26 @@ class Connect(FakeAdbCase):
         self.assertFalse(doc["ok"])
         self.assertEqual(doc["error"]["code"], "timeout")
         self.assertLess(time.monotonic() - started, 15)
+        self.assertNotIn("VPN", doc["error"]["message"])
+
+    def test_a_timed_out_connect_names_the_vpn_that_is_up(self):
+        # Seen 2026-09-05: NordVPN with LAN Discovery off dropped every packet to the phone and the
+        # helper saw only timeouts. With a tunnel interface up, the timeout and the failure text say so.
+        self.interface("nordlynx", kind=65534)
+        self.interface("enp6s0", kind=1)
+        self.add_rules({"match": f"connect {WIFI}", "stdout": "", "sleep": 30})
+        doc = self.run_cli("connect", WIFI, env={"OMARCHY_ANDROID_DEV_TOTAL_BUDGET": "0"})
+        self.assertEqual(doc["error"]["code"], "timeout")
+        self.assertIn("a VPN is up (nordlynx)", doc["error"]["message"])
+        self.add_rules({"match": f"connect {WIFI}", "stdout": f"failed to connect to '{WIFI}': Connection timed out\n"})
+        doc = self.run_cli("connect", WIFI)
+        self.assertEqual(doc["error"]["code"], "adb_failed")
+        self.assertIn("failed to connect", doc["error"]["message"])
+        self.assertIn("a VPN is up (nordlynx)", doc["error"]["message"])
+        # A tunnel that is down is not a VPN in the way.
+        self.interface("nordlynx", kind=65534, up=False)
+        doc = self.run_cli("connect", WIFI)
+        self.assertNotIn("VPN", doc["error"]["message"])
 
     def test_bad_addresses_never_reach_adb(self):
         for bad in ("[fe80::1]:5555", "nope nope", "-s"):
@@ -198,6 +219,7 @@ class Connect(FakeAdbCase):
         doc = self.run_cli("disconnect", MDNS_SERIAL)
         self.assertTrue(doc["ok"], doc)
         self.assertIn(["disconnect", MDNS_SERIAL], self.calls())
+        self.assertEqual(doc["notice"], f"Disconnected: {MDNS_INSTANCE}")
         # Only that shape: an underscore anywhere else is still refused.
         self.assertEqual(self.run_cli("disconnect", "some_thing")["error"]["code"], "bad_args")
         self.assertEqual(self.run_cli("connect", MDNS_SERIAL)["error"]["code"], "bad_args")
@@ -233,7 +255,8 @@ class PairCode(FakeAdbCase):
         self.assertTrue(doc["ok"], doc)
         self.assertEqual(doc["serial"], MDNS_SERIAL)
         self.assertEqual(doc["selected"], MDNS_SERIAL)
-        self.assertEqual(doc["notice"], f"Paired with Pixel 7 ({MDNS_SERIAL})")
+        self.assertEqual(doc["notice"], f"Paired with Pixel 7 ({MDNS_INSTANCE})")
+        self.assertEqual(doc["label"], f"Pixel 7 ({MDNS_INSTANCE})")  # the serial stays the whole name
         self.assertEqual([d["kind"] for d in doc["devices"]], ["usb", "wifi"])
         self.assertTrue(any("mdns services" in c for c in self.joined_calls()))
         self.assertEqual(self.run_cli("devices")["selected"], MDNS_SERIAL)
@@ -255,6 +278,17 @@ class PairCode(FakeAdbCase):
         self.assertFalse(doc["ok"])
         self.assertEqual(doc["error"]["code"], "adb_failed")
         self.assertIn("wrong code", doc["error"]["message"])
+
+    def test_a_pairing_that_cannot_reach_the_phone_names_the_vpn(self):
+        self.interface("tun0", kind=65534)
+        self.add_rules({"match": f"pair {PAIR_ADDR}", "stdin": True, "stdout": "Failed: Unable to start pairing client.\n"})
+        doc = self.run_cli("pair", "code", PAIR_ADDR, input="123456\n")
+        self.assertEqual(doc["error"]["code"], "adb_failed")
+        self.assertIn("a VPN is up (tun0)", doc["error"]["message"])
+        # A wrong code means the phone was reached: no hint.
+        self.add_rules({"match": f"pair {PAIR_ADDR}", "stdin": True, "stdout": "Failed: Wrong password or connection was dropped.\n"})
+        doc = self.run_cli("pair", "code", PAIR_ADDR, input="123456\n")
+        self.assertNotIn("VPN", doc["error"]["message"])
 
     def test_bad_codes_and_addresses_never_reach_adb(self):
         for code in ("12345\n", "abc123\n", "", "\n"):
@@ -444,6 +478,37 @@ class Status(FakeAdbCase):
         self.assertEqual(doc["port"], 5555)
         self.assertEqual(doc["pair_seconds"], 120)
         self.assertNotIn("recent_addresses", doc)
+        self.assertEqual(doc["vpn"], {"up": False, "interfaces": [], "label": None, "text": None})
+
+    def test_a_vpn_interface_that_is_up_is_in_the_document(self):
+        self.add_rules({"match": "mdns check", "stdout": MDNS_OK}, {"match": "mdns services", "stdout": MDNS_HEADER})
+        self.interface("nordlynx", kind=65534)
+        self.interface("ppp0", kind=512)
+        self.interface("tun1", kind=65534, up=False)
+        self.interface("wlp7s0", kind=1)
+        self.interface("lo", kind=772)
+        doc = self.run_cli("wireless")
+        self.assertTrue(doc["vpn"]["up"])
+        self.assertEqual(doc["vpn"]["interfaces"], ["nordlynx", "ppp0"])
+        self.assertEqual(doc["vpn"]["label"], "A VPN is up: nordlynx, ppp0")
+        self.assertIn("LAN Discovery", doc["vpn"]["text"])
+        # Without adb the check still runs: the note is worth showing on its own.
+        doc = self.run_cli("wireless", env={"OMARCHY_ANDROID_DEV_PATH": "/nonexistent"})
+        self.assertEqual(doc["error"]["code"], "no_adb")
+        self.assertTrue(doc["vpn"]["up"])
+        # An unreadable sysfs is no VPN, never an error.
+        doc = self.run_cli("wireless", env={"OMARCHY_ANDROID_DEV_NET_DIR": "/nonexistent"})
+        self.assertTrue(doc["ok"], doc)
+        self.assertFalse(doc["vpn"]["up"])
+
+    def test_vpn_interfaces_reads_sysfs_only(self):
+        self.interface("wg_home", kind=65534)
+        self.interface("bad name", kind=65534)
+        self.assertEqual(wireless.vpn_interfaces(self.net_dir), ["wg_home"])
+        self.assertEqual(wireless.vpn_interfaces("/nonexistent"), [])
+        for i in range(12):
+            self.interface(f"tun{i}", kind=65534)
+        self.assertEqual(len(wireless.vpn_interfaces(self.net_dir)), wireless.MAX_VPN_INTERFACES)
 
     def test_an_auto_connected_phone_is_a_wifi_device_and_its_service_is_attached(self):
         self.add_rules({"match": "mdns check", "stdout": MDNS_OK}, {"match": "mdns services", "stdout_file": "mdns_services.txt"},

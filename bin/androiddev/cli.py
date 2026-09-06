@@ -62,7 +62,7 @@ HELP = [
     ("tool avd NAME", "start that AVD (refused while it runs)"),
     ("tool avd-stop SERIAL", "stop a running emulator (adb emu kill)"),
     ("tool logcat [PKG]", "adb logcat in a terminal, following PKG's process when given"),
-    ("wireless", "mDNS yes or no, the pairing and connect services on the network, the Wi-Fi and plugged devices"),
+    ("wireless", "mDNS yes or no, the pairing and connect services on the network, the Wi-Fi and plugged devices, a VPN interface that is up"),
     ("pair qr", "streaming: a pairing QR code as a PNG, then wait for the phone to scan it and pair (Ctrl-C cancels)"),
     ("pair code ADDR", "pair with the address and six-digit code from Pair device with pairing code; the code is read from stdin, never argv"),
     ("connect ADDR", "adb connect host[:port] (5555 without a port), then wait until the device is ready"),

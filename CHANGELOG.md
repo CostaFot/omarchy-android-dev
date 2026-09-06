@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.0
+
+The Wireless page and a VPN in the way (board issue COS-77).
+
+- Added: the Wireless page says when a VPN interface is up on this machine (`A VPN is up: nordlynx`, a note at the foot of the page, not urgent) and what to do if nothing on Wi-Fi ever answers: let LAN traffic through (NordVPN: LAN Discovery) or disconnect it while pairing. A VPN that isolates the LAN was the whole of a lost afternoon on 2026-09-05: every packet to the phone dropped and the helper saw only timeouts. The helper reads `/sys/class/net` for a tunnel interface that is up (wireguard, tun, tailscale, ppp) and spawns nothing; the `wireless` document carries it as `vpn`.
+- Added: a connect that times out or fails to reach the phone, a pairing that cannot start its client, and a QR session nobody scanned name the VPN in their error when one is up (`… · a VPN is up (nordlynx); if it isolates the LAN, nothing here reaches the phone`). A wrong pairing code gets no hint: the phone was reached.
+- Changed: the entry adb makes for a phone it connected to on its own is labelled by its mDNS instance, `PTP-N49 (adb-AQCK025731000692-WBgDVa)`, instead of the whole service name with `._adb-tls-connect._tcp.` on the end, which filled the hub's row. The serial is unchanged (it is what `-s` and `disconnect` take) and the instance is what *Seen on the network* lists the phone under; the Disconnected notice shows the instance too.
+- Tests: 204. `OMARCHY_ANDROID_DEV_NET_DIR` points the suite at a fake `/sys/class/net`, so the developer's own VPN colours no test.
+
 ## 1.4.1
 
 The smaller findings of the 1.2.0 review (board issue COS-98).

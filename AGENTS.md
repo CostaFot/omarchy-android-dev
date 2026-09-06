@@ -240,3 +240,7 @@ The IpcHandler "registered but will not be used" warnings for other plugins' tar
 ~~0 survey the marketplace's twelve Android plugins~~ · ~~1 repo docs + Python core (terminal only)~~ (0.1.0) · ~~2 service, bar widget, hub~~ (0.2.0) · ~~3 devices, packages, actions, deep links~~ (0.3.0) · ~~4 toggles, screenshot, screen record~~ (0.4.0) · ~~5 APK manager, send text, tools~~ (0.5.0) · ~~6 settings page, IPC, keybinding docs~~ (0.6.0) · ~~7 release polish~~ (1.0.0) · ~~wireless: Wi-Fi pairing, connect, go wireless~~ (1.2.0; plan in `~/.claude/plans/i-think-we-need-staged-pie.md`) · 8 publish (marketplace, projects page)
 
 Every change that a user can see bumps the `manifest.json` version with its `CHANGELOG.md` entry in the same commit (a feature or a behaviour change is a minor bump, a fix a patch); nothing sits under an Unreleased heading. Each session ends with tests green, `omarchy plugin validate` clean, `qmllint` clean, this file updated, and the plan file's Status line appended. Commit only when Costa asks; never push, amend or add co-author trailers.
+
+## Board
+
+This repo is the Linear project **omarchy-android-dev** on Costa's public board (https://www.costafotiadis.com/board/). The `board` skill has the commands. Issues for this repo carry that project and one area label (`omarchy`). Follow-ups (a deferred fix, a check that waits on something external, a TODO written here) become an issue before the session ends; a note in this file is not a substitute.

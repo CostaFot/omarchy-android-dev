@@ -83,6 +83,17 @@ class ManifestMatchesTheQml(unittest.TestCase):
         self.assertEqual(m.group(1).split(), pages)
         self.assertIn("settings", pages)
 
+    def test_ipc_has_no_go_wireless_verbs(self):
+        # Go wireless and Back to USB left the panel and the IPC surface in
+        # 1.4.0 (pairing covers them); the helper keeps `tcpip` and `usb`
+        # for the terminal. A row or a verb coming back is a decision, not
+        # a drift.
+        for verb in ("tcpip", "usb"):
+            self.assertNotIn(f"function {verb}(", self.service, verb)
+            self.assertNotIn(f'"  {verb} ', self.service, verb)
+            self.assertNotIn(f'action: "{verb}"', self.panel, verb)
+        self.assertNotIn("Plugged phones", self.panel)
+
     def test_help_names_every_setting(self):
         for key in SETTING_DEFAULTS:
             self.assertIn(key, self.service, key)

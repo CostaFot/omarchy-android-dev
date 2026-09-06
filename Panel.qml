@@ -38,7 +38,7 @@ Panel {
   readonly property string glyph: "\uf17b"
   readonly property var kindGlyphs: ({ emulator: "\uf108", usb: "\uf10b", wifi: "\uf1eb" })
   // The Wireless page's glyphs (nf-fa qrcode, key, link, times, plug, usb), as escapes.
-  readonly property var wirelessGlyphs: ({ qr: "\uf029", key: "\uf084", link: "\uf0c1", cancel: "\uf00d", plug: "\uf1e6", usb: "\uf287" })
+  readonly property var wirelessGlyphs: ({ qr: "\uf029", key: "\uf084", link: "\uf0c1", cancel: "\uf00d" })
 
   function refresh() {
     if (!store) return
@@ -47,7 +47,7 @@ Panel {
     else if (page === "toggles") store.refreshToggles()
     else if (page === "apks") { resetInstalls(); listApks() }
     else if (page === "tools") store.refreshTools()
-    else if (page === "wireless") store.refreshWireless()
+    else if (page === "wireless" || page === "paircode") store.refreshWireless()
     else store.refreshStatus()
   }
 
@@ -114,7 +114,7 @@ Panel {
       else if (entry.page === "toggles") store.refreshToggles()
       else if (entry.page === "apks") { resetInstalls(); listApks() }
       else if (entry.page === "tools") store.refreshTools()
-      else if (entry.page === "wireless") store.refreshWireless()
+      else if (entry.page === "wireless" || entry.page === "paircode") store.refreshWireless()
     }
     if (entry.page === "settings") loadPendingSettings()
     Qt.callLater(function() {
@@ -629,13 +629,15 @@ Panel {
   }
 
   // ---- Wireless -----------------------------------------------------------
-  // Three ways onto Wi-Fi: a pairing QR code (a helper session the service
-  // runs; the phone scans it from its Wireless debugging screen), the
-  // address and six-digit code from Pair device with pairing code (two
-  // steps through the one field, the code sent on stdin), and Go wireless
-  // for a plugged phone (adb tcpip 5555). A paired phone connects on its
-  // own; the ones seen on the network are rows. The lists follow the
-  // tracker; the services come from the helper's `wireless` document.
+  // Two ways onto Wi-Fi: a pairing QR code (a helper session the service
+  // runs; the phone scans it from its Wireless debugging screen) and the
+  // six-digit code from Pair device with pairing code (the address picked
+  // off the network or typed, then the code, through the one field, the
+  // code sent on stdin). A paired phone connects on its own; the ones seen
+  // on the network are rows. Go wireless (adb tcpip) left the panel in
+  // 1.4.0; the helper keeps `tcpip` and `usb` for the terminal. The lists
+  // follow the tracker; the services come from the helper's `wireless`
+  // document.
   function wirelessRows() {
     var s = root.store
     var svc = root.service
@@ -665,7 +667,7 @@ Panel {
       else
         out.push({ type: "note", label: "No QR pairing: qrencode not installed", detail: "Install the qrencode package (it is in Omarchy's base set), or pair with a code." })
       out.push({ type: "action", icon: wirelessGlyphs.key, label: "Pair with a code",
-                 detail: "The address and six digits under Wireless debugging › Pair device with pairing code", page: "paircode" })
+                 detail: "The six digits under Wireless debugging › Pair device with pairing code; the address is picked off the network", page: "paircode" })
     }
     out.push({ type: "header", label: "Wi-Fi devices" })
     var wifi = 0
@@ -675,8 +677,6 @@ Panel {
       wifi++
       out.push({ type: "action", icon: kindGlyphs.wifi, label: d.label || d.serial, detail: (d.detail || "") + " · Enter disconnects",
                  action: "disconnect", addr: d.serial, urgent: d.state !== "device" })
-      out.push({ type: "action", icon: wirelessGlyphs.usb, label: "Back to USB", detail: "adb usb · for a phone put on Wi-Fi by Go wireless",
-                 action: "usb", serial: d.serial })
     }
     if (wifi === 0) out.push({ type: "note", label: "None connected" })
     if (w && Array.isArray(w.services)) {
@@ -689,23 +689,16 @@ Panel {
                    action: "connect", addr: sv.address })
       }
     }
-    out.push({ type: "header", label: "Plugged phones" })
-    var usb = 0
-    for (var j = 0; j < s.devices.length; j++) {
-      var p = s.devices[j]
-      if (p.kind !== "usb") continue
-      usb++
-      out.push({ type: "action", icon: wirelessGlyphs.plug, label: p.label || p.serial,
-                 detail: p.state === "device" ? "Go wireless · adb tcpip 5555, then connect to its Wi-Fi address; the cable can come out after" : (p.detail || ""),
-                 action: "tcpip", serial: p.serial, urgent: p.state !== "device" })
-    }
-    if (usb === 0) out.push({ type: "note", label: "None plugged in", detail: "Go wireless needs the phone on the cable once; pairing does not." })
     return out
   }
 
   // Step one takes the pairing address, step two the code; `current.addr`
-  // tells them apart. The code never touches an argv: it goes to the
-  // helper's stdin and from there to adb's.
+  // tells them apart. While the phone's pairing dialog is open it advertises
+  // the pairing address on mDNS (`_adb-tls-pairing._tcp`), so the addresses
+  // seen are rows and typing one is the fallback; six digits typed there are
+  // the code in the wrong box (seen 2026-09-07) and are refused. The code
+  // never touches an argv: it goes to the helper's stdin and from there to
+  // adb's.
   function paircodeRows() {
     var s = root.store
     var out = []
@@ -715,11 +708,25 @@ Panel {
     }
     var addr = current.addr || ""
     if (addr === "") {
+      var isCode = /^\d{6}$/.test(query)
       if (query !== "")
-        out.push({ type: "action", icon: wirelessGlyphs.link, label: query, detail: "Use this as the pairing address, then type the code", action: "pairaddr", addr: query })
-      else
-        out.push({ type: "note", label: "Type the pairing address, then Enter",
-                   detail: "Wireless debugging › Pair device with pairing code shows an ip:port (not the one on the main screen) and a six-digit code." })
+        out.push({ type: "action", icon: wirelessGlyphs.link, label: query,
+                   detail: isCode ? "That is the code; the pairing address (ip:port) comes first" : "Use this as the pairing address, then type the code",
+                   action: "pairaddr", addr: query, urgent: isCode })
+      var w = s.wirelessInfo
+      var seen = 0
+      if (w && Array.isArray(w.services)) {
+        for (var k = 0; k < w.services.length; k++) {
+          var sv = w.services[k]
+          if (sv.kind !== "pairing") continue
+          seen++
+          out.push({ type: "action", icon: wirelessGlyphs.key, label: sv.address,
+                     detail: (sv.instance || "") + " · pairing address seen on the network · Enter uses it", action: "pairaddr", addr: sv.address })
+        }
+      }
+      if (seen === 0 && query === "")
+        out.push({ type: "note", label: !w && s.busy && s.runningCommand === "wireless" ? "Looking at the network…" : "No pairing address seen yet",
+                   detail: "Open Wireless debugging › Pair device with pairing code on the phone and press r; or type its ip:port (not the one on the main screen), then Enter." })
       return out
     }
     // A literal around the address, like "Logcat · PKG".
@@ -742,7 +749,7 @@ Panel {
     if (page === "text") return "Type a line, Enter sends it · ↑/↓ move · Esc back"
     if (page === "tools") return "j/k move · Enter runs it · r reads again · Esc back"
     if (page === "wireless") return "j/k move · Enter runs it · r looks again · Esc back"
-    if (page === "paircode") return "Type the address, Enter, then the code, Enter · Esc back"
+    if (page === "paircode") return "Enter takes the address, then the code · r looks again · Esc back"
     if (page === "settings") return "j/k or Tab move · Enter edits or flips · Enter on Save · Esc cancels"
     return "Esc or Backspace back"
   }
@@ -1034,7 +1041,10 @@ Panel {
     if (row.action === "refresh") refresh()
     else if (row.action === "pairqr") { if (service && typeof service.startPairing === "function") service.startPairing() }
     else if (row.action === "pairstop") { if (service && typeof service.stopPairing === "function") service.stopPairing() }
-    else if (row.action === "pairaddr") { setCurrent({ addr: row.addr }); filterField.text = "" }
+    else if (row.action === "pairaddr") {
+      if (/^\d{6}$/.test(row.addr)) { if (store) store.showNotice("That is the code: the pairing address (ip:port) comes first", true); return }
+      setCurrent({ addr: row.addr }); filterField.text = ""
+    }
     else if (row.action === "paircode") {
       if (!/^\d{6}$/.test(row.code)) { if (store) store.showNotice("The pairing code is six digits", true); return }
       filterField.text = ""
@@ -1042,8 +1052,6 @@ Panel {
     }
     else if (row.action === "connect") act(["connect", row.addr])
     else if (row.action === "disconnect") act(["disconnect", row.addr])
-    else if (row.action === "tcpip") act(["tcpip", row.serial])
-    else if (row.action === "usb") act(["usb", row.serial])
     else if (row.action === "select") { if (store) store.selectDevice(row.serial); pop() }
     else if (row.action === "package") push({ page: "actions", pkg: row.pkg })
     else if (row.action === "deeplink") act(["deeplink", row.url].concat(row.pkg ? [row.pkg] : []))
@@ -1215,7 +1223,7 @@ Panel {
           placeholderText: root.page === "deeplink" ? "URL or deep link, then Enter"
             : root.page === "apks" ? "Folder with .apk files"
             : root.page === "text" ? "Text to type on the device, then Enter"
-            : root.page === "paircode" ? (root.current.addr ? "The six-digit pairing code, then Enter" : "Pairing address ip:port, then Enter")
+            : root.page === "paircode" ? (root.current.addr ? "The six-digit pairing code, then Enter" : "Pairing address ip:port, or Enter on one seen")
             : "Filter packages"
 
           Keys.onPressed: function(event) {

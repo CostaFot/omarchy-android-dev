@@ -584,8 +584,6 @@ Item {
     "  logcat [PKG]         adb logcat in a terminal, following PKG's process when given",
     "  pair start|stop|toggle  a pairing QR code in the panel; the phone scans it from Wireless debugging",
     "  disconnect ADDR      adb disconnect host[:port], or the mDNS name of a phone adb connected to on its own",
-    "  tcpip SERIAL         go wireless: adb tcpip 5555 on that plugged phone, connect to its Wi-Fi address, select it (\"\" for the selected device)",
-    "  usb SERIAL           back to USB (adb usb) for that entry; the Wi-Fi one drops (\"\" for the selected device)",
     "  refresh              re-read adb and the device list",
     "Action verbs return at once; the result arrives as a notification and in the panel.",
     "Settings: the panel's Settings page, or `omarchy bar set costafot.android-dev KEY VALUE` (adbPath screenshotDir",
@@ -676,18 +674,6 @@ Item {
       // An address, or the mDNS name adb gave an auto-connected phone (the serial alphabet; the helper checks the shape).
       var a = root.validAddress(address) || root.validSerial(address)
       return a === "" ? "disconnect needs an address as ip:port, or a Wi-Fi entry's serial" : root.act(["disconnect", a])
-    }
-    function tcpip(serial: string): string {
-      var s = String(serial || "").trim()
-      if (s === "") return root.act(["tcpip"])
-      var v = root.validSerial(s)
-      return v === "" ? "tcpip takes a USB serial, or nothing for the selected device" : root.act(["tcpip", v])
-    }
-    function usb(serial: string): string {
-      var s = String(serial || "").trim()
-      if (s === "") return root.act(["usb"])
-      var v = root.validSerial(s)
-      return v === "" ? "usb takes a serial, or nothing for the selected device" : root.act(["usb", v])
     }
     function refresh(): string { root.store.refreshStatus(); return "requested" }
   }

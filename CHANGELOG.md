@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.0
+
+- Changed: *Go wireless* and *Back to USB* have left the Wireless page, and the `tcpip` and `usb` verbs the IPC surface. Pairing by QR code or by code covers what they did: a paired phone connects on its own whenever its Wireless debugging is on, with no cable-first step, no `adb tcpip` that a reboot undoes and no dead `ip:port` entry to clean up after. The *Plugged phones* section went with them. The helper keeps `tcpip` and `usb` for the terminal, unchanged.
+- Changed: the *Pair with a code* page no longer asks for the address first. While the phone's *Pair device with pairing code* dialog is open it announces the pairing address on the network, and the page lists each one it sees as a row: Enter takes it, and only the six digits are typed. The page reads the network on entry and on `r` again (the ordered queue of 1.3.2 keeps a pairing code behind that read, which is what had stopped it). Typing the address stays as the fallback, and six digits typed there are refused with a word: on 2026-09-07 the code went into the address box, the panel took it as the address and the second step had nothing left to send.
+- Checked live on 2026-09-07: pairing by QR code again, adb connecting on its own after a reconnect, and pairing by code from the panel with a second phone (an OPPO Find X5), the code on stdin end to end. That closes the live pass.
+- README: two ways instead of three, the pair-by-code paragraph, the IPC example, the FAQ; `wireless.png` retaken.
+- Tests: 197.
+
 ## 1.3.3
 
 - Fixed: *Back to USB* left the phone's old Wi-Fi entry in the picker as *Wi-Fi · offline*, in the urgent colour, for minutes: adb keeps retrying an address it was told to connect to. The helper disconnects the dead entry now: the one named, or, when the plugged entry is named, the ones on the phone's Wi-Fi address; an mDNS-named entry (a paired phone adb found on its own) is left for adb to find again. A dropped entry that was the selection moves to the phone on the cable. The `usb` answer lists them as `disconnected`.

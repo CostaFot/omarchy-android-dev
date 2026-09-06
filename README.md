@@ -73,11 +73,11 @@ It opens on a hub: the selected device with its state, then the pages. Every pag
 **Tools** has *Mirror with scrcpy* (once scrcpy is installed; with *Mirror with the screen off* on, the phone's own screen goes dark and stays awake while the mirror runs, and the *Extra scrcpy arguments* setting is appended; the row says whether it mirrors over USB or over Wi-Fi), *Logcat* for the package you last opened (`adb logcat --pid=…` in your default terminal; the app has to be running), and one row per emulator AVD showing Running or Stopped: Enter starts a stopped one and, after a confirm, stops a running one. What this page launches is yours to close; the plugin never kills it.
 
 <p>
-<img src="assets/screenshots/wireless.png" width="300" alt="the wireless page: the three ways to pair or connect, the Wi-Fi devices, the plugged phones">
+<img src="assets/screenshots/wireless.png" width="300" alt="the wireless page: the two ways to pair, the Wi-Fi devices, the phones seen on the network">
 <img src="assets/screenshots/wireless-qr.png" width="300" alt="the wireless page while a pairing code is shown">
 </p>
 
-**Wireless** gets a phone onto Wi-Fi debugging, three ways. *Pair with a QR code* shows a code in the panel; on the phone open Developer options › Wireless debugging › *Pair device with QR code* and scan it from there, nowhere else: the code is a Wi-Fi-credential string by format, and a camera app would try to join a network that does not exist. The plugin waits up to two minutes, pairs, and adb connects by itself from then on whenever the phone's Wireless debugging is on (Android picks a new port each time it is toggled; adb finds it through mDNS, so there is nothing to type again). *Pair with a code* takes the address and the six digits from *Pair device with pairing code* (a different port from the one on the main Wireless debugging screen), in two steps in the one box. A paired phone that is on the network but not connected shows under *Seen on the network*; Enter connects to it. *Go wireless*, on a plugged phone, is the older way that needs no pairing: `adb tcpip 5555`, then a connect to the phone's Wi-Fi address; the cable can come out, and the phone appears twice in the picker until it does, the Wi-Fi entry selected. It lasts until the phone reboots; *Back to USB* ends it sooner and drops the Wi-Fi entry. Each Wi-Fi entry has Disconnect. A paired phone over Wi-Fi mirrors, records and takes every other page like a plugged one.
+**Wireless** gets a phone onto Wi-Fi debugging, two ways. *Pair with a QR code* shows a code in the panel; on the phone open Developer options › Wireless debugging › *Pair device with QR code* and scan it from there, nowhere else: the code is a Wi-Fi-credential string by format, and a camera app would try to join a network that does not exist. The plugin waits up to two minutes, pairs, and adb connects by itself from then on whenever the phone's Wireless debugging is on (Android picks a new port each time it is toggled; adb finds it through mDNS, so there is nothing to type again). *Pair with a code* is for the phone's *Pair device with pairing code* dialog: while that dialog is open the phone announces its pairing address on the network and the page lists it, so Enter takes the address and you type only the six digits (the address can be typed too, for an adb without mDNS; it is the one in the dialog, a different port from the main Wireless debugging screen). A paired phone that is on the network but not connected shows under *Seen on the network*; Enter connects to it. Each Wi-Fi entry has Disconnect. The older cable-first way, `adb tcpip 5555`, is not on the page: the helper keeps `tcpip` and `usb` for the terminal. A paired phone over Wi-Fi mirrors, records and takes every other page like a plugged one.
 
 <img src="assets/screenshots/settings.png" width="300" alt="the settings form">
 
@@ -106,7 +106,7 @@ Saved on the plugin's entry in `~/.config/omarchy/shell.json`, from the panel's 
 
 `adb`, from the `android-tools` package or the SDK platform-tools. It does not need to be on `PATH`: the plugin looks in `$ANDROID_HOME`, `$ANDROID_SDK_ROOT` and `~/Android/Sdk` too, and the `adbPath` setting can point at it.
 
-A device over USB with USB debugging on, or an emulator, or a phone over Wi-Fi: Android 11 or newer with Wireless debugging on for the pairing paths (the QR one also wants the SDK's adb, which has mDNS built in where the `android-tools` one does not, and `qrencode`, which Omarchy ships), any Android with the cable in once for Go wireless. The phone and this machine have to be on the same network with nothing in between: a VPN that isolates the LAN (NordVPN with LAN Discovery off, say) leaves the plugin with timeouts. The Tools page needs the SDK's `emulator` for the AVD rows and the `scrcpy` package for mirroring; both are optional and the rows appear when they are installed, no restart needed.
+A device over USB with USB debugging on, or an emulator, or a phone over Wi-Fi: Android 11 or newer with Wireless debugging on (the QR way, and the pairing address showing up by itself, also want the SDK's adb, which has mDNS built in where the `android-tools` one does not; the QR way wants `qrencode` too, which Omarchy ships). The phone and this machine have to be on the same network with nothing in between: a VPN that isolates the LAN (NordVPN with LAN Discovery off, say) leaves the plugin with timeouts. The Tools page needs the SDK's `emulator` for the AVD rows and the `scrcpy` package for mirroring; both are optional and the rows appear when they are installed, no restart needed.
 
 ## From the shell
 
@@ -126,7 +126,7 @@ omarchy-shell costafot.android-dev scrcpy                      # mirror the sele
 omarchy-shell costafot.android-dev avd Medium_Phone            # start that emulator
 omarchy-shell costafot.android-dev logcat com.android.chrome   # adb logcat --pid in a terminal; no package follows everything
 omarchy-shell costafot.android-dev pair start                  # a pairing QR code in the panel; stop cancels it
-omarchy-shell costafot.android-dev tcpip ""                    # go wireless with the selected (plugged) phone; usb "" puts it back, disconnect ADDR drops a Wi-Fi entry
+omarchy-shell costafot.android-dev disconnect ADDR             # drops a Wi-Fi entry (its ip:port, or the name adb gave a paired phone)
 ```
 
 Every verb returns at once; the result arrives as a notification and in the panel.
@@ -186,7 +186,7 @@ bin/omarchy-android-dev tools | jq '.avds[] | [.name, .detail]'         # tool s
 bin/omarchy-android-dev wireless | jq '{mdns, services}'                # the pairing and connect services on the network
 bin/omarchy-android-dev pair qr                                         # prints the PNG's path, waits for the phone to scan it; Ctrl-C cancels
 printf '123456\n' | bin/omarchy-android-dev pair code 192.168.1.5:37123 # the code on stdin, never on the command line
-bin/omarchy-android-dev connect 192.168.1.5 | jq .notice                # disconnect ADDR; tcpip [USBSERIAL] goes wireless, usb [SERIAL] comes back
+bin/omarchy-android-dev connect 192.168.1.5 | jq .notice                # disconnect ADDR; tcpip [USBSERIAL] and usb [SERIAL] are the older cable-first way, terminal only
 ```
 
 Emulators show up by their AVD name, as in `Pixel 10 Pro Fold (emulator-5554)`.
@@ -207,7 +207,7 @@ State lives in `~/.local/state/omarchy/costafot.android-dev/`: the selected devi
 
 **Two devices, and it talks to the wrong one.** Enter on the hub's device row opens the picker. The choice is remembered per serial; when the remembered device is gone and one other is attached, that one is used. Over IPC and from a terminal, `select SERIAL` or `--serial SERIAL` does the same.
 
-**Which wireless path do I use?** A phone that is plugged in right now: *Go wireless*, then unplug. A phone that is not: *Pair with a QR code* (or with a code when the QR row is missing, which means this adb has no mDNS) once; after that it connects on its own whenever its Wireless debugging is on. A phone paired before that did not come back by itself: toggle its Wireless debugging off and on, or pick it under *Seen on the network*; from a terminal, `bin/omarchy-android-dev connect ip:port` with what the Wireless debugging screen shows.
+**Which wireless path do I use?** *Pair with a QR code* once (or with a code when the QR row is missing, which means this adb has no mDNS); after that the phone connects on its own whenever its Wireless debugging is on, cable or not. A phone paired before that did not come back by itself: toggle its Wireless debugging off and on, or pick it under *Seen on the network*; from a terminal, `bin/omarchy-android-dev connect ip:port` with what the Wireless debugging screen shows.
 
 **It paired, but the phone shows offline or disappeared.** Android drops Wireless debugging when the phone leaves the network or sleeps for long, and picks a new port when it is toggled. Toggle it off and on, then *Look again* on the Devices page or `r` on the Wireless page; a paired phone reconnects by itself once its service is back on the network. The switch can read on while its server is not running (seen on an HONOR phone after a reboot): toggling it is the cure there too. Keep the phone awake while pairing; asleep, it filters the multicast that mDNS runs on and answers no query. If nothing on Wi-Fi ever works, check for a VPN on either side that isolates the LAN: with NordVPN's LAN Discovery off, for example, even a ping to the phone gets nothing back.
 

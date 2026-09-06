@@ -232,4 +232,4 @@ omarchy plugin remove costafot.android-dev
 rm -rf ~/.local/state/omarchy/costafot.android-dev
 ```
 
-Ideas for later, and what was left out on purpose, are in `IDEAS.md`.
+Ideas for later are issues on https://www.costafotiadis.com/board/ under the omarchy-android-dev project.

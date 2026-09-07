@@ -68,7 +68,13 @@ cannot read as text (`security-baseline-scope.mjs`; seen 2026-09-08 with
 scanner can be run locally against a pushed commit: clone the marketplace
 repo, then `runSecurityBaseline(repoUrl, sha, { requiredPaths })` from
 `scripts/security-baseline.mjs` with `GITHUB_TOKEN` set (`gh auth token`);
-Markets' listed commit is the control that passes.
+Markets' listed commit is the control that passes. On this tree the scan
+completes as `review-required` with one capability, `package-manager`: its
+regex reads the word `apk` followed by `install` in any scanned text as
+Alpine's package manager, and the helper's APK verb is spelled that way in
+the README and in `cli.py`. Renaming the verb would look like evading the
+scanner (Costa, 2026-09-08), so it stays and the maintainer notes explain
+it; a maintainer accepts a capability by hand, as Clippy's were.
 
 What a maintainer will read, and what the notes below say up front:
 
@@ -124,5 +130,6 @@ What a maintainer will read, and what the notes below say up front:
 - 2026-09-08: v1.12.4 tagged and released; `next` branched off `main` for
   the work between releases. Running the baseline scanner locally against
   that commit failed closed on `apks-installed.png` (the rule above), so
-  v1.12.5 renames the screenshot and is the commit submitted. The
+  v1.12.5 renames the screenshot and is the commit submitted, with the
+  `package-manager` capability above disclosed in the notes. The
   submission issue: see below once filed.

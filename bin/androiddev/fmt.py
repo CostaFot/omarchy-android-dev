@@ -17,6 +17,7 @@ MAX_PERMISSIONS = 512
 MAX_AVDS = 64
 MAX_APKS = 200
 MAX_RECENT_DEEPLINKS = 10
+MAX_RECENT_APK_DIRS = 10
 MAX_MDNS_SERVICES = 32
 
 CAP_DEFAULT = 256 * 1024          # adb stdout, most commands
@@ -188,9 +189,13 @@ def adb_source_text(source):
 
 
 def display_path(path):
+    """`~/Downloads` for a path under the home directory, the path itself
+    otherwise. The separator is required: `/home/costa-backup/apks` is not
+    under `/home/costa`, and since 1.6.0 a display path goes back into the
+    APKs page's folder box, where `expanduser` has to return what came in."""
     home = os.path.expanduser("~")
     p = str(path or "")
-    if home and p.startswith(home):
+    if home and (p == home or p.startswith(home + os.sep)):
         return "~" + p[len(home):]
     return p
 

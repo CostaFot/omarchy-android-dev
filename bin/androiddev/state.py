@@ -139,7 +139,7 @@ def file_token(serial):
 
 class State:
     """state.json (selected serial, last package per serial, recent deep
-    links, recent Wi-Fi addresses) and packages-<serial>.json (the last
+    links, recent APK folders) and packages-<serial>.json (the last
     package list). Loaded lazily, written only by save() when something
     changed."""
 
@@ -162,7 +162,7 @@ class State:
     def _load(self):
         if self._doc is not None:
             return self._doc
-        self._doc = {"selected": None, "last_package": {}, "recent_deeplinks": []}
+        self._doc = {"selected": None, "last_package": {}, "recent_deeplinks": [], "recent_apk_dirs": []}
         if not self.dir:
             return self._doc
         data, problem = read_json(self._path("state.json"), default={})
@@ -175,6 +175,8 @@ class State:
                 self._doc["last_package"] = {fmt.clean(k): fmt.clean(v) for k, v in data["last_package"].items() if isinstance(v, str)}
             if isinstance(data.get("recent_deeplinks"), list):
                 self._doc["recent_deeplinks"] = [fmt.clean(u, 2048) for u in data["recent_deeplinks"] if isinstance(u, str)][:fmt.MAX_RECENT_DEEPLINKS]
+            if isinstance(data.get("recent_apk_dirs"), list):
+                self._doc["recent_apk_dirs"] = [fmt.clean(d) for d in data["recent_apk_dirs"] if isinstance(d, str) and d][:fmt.MAX_RECENT_APK_DIRS]
         return self._doc
 
     def reload(self):
@@ -211,6 +213,26 @@ class State:
         recent = [u for u in doc["recent_deeplinks"] if u != url]
         recent.insert(0, url)
         doc["recent_deeplinks"] = recent[:fmt.MAX_RECENT_DEEPLINKS]
+        self._dirty = True
+
+    @property
+    def recent_apk_dirs(self):
+        return list(self._load()["recent_apk_dirs"])
+
+    def add_apk_dir(self, path):
+        """The folder an APK was installed from, newest first. A path that
+        `clean` would change (longer than one field, a tab or a control
+        character in a folder name) is not remembered at all: the panel
+        hands these back as the folder to list, and a path cut short or
+        rewritten would name another folder or none."""
+        raw = str(path or "")
+        d = fmt.clean(raw)
+        if not d or d != raw:
+            return
+        doc = self._load()
+        recent = [p for p in doc["recent_apk_dirs"] if p != d]
+        recent.insert(0, d)
+        doc["recent_apk_dirs"] = recent[:fmt.MAX_RECENT_APK_DIRS]
         self._dirty = True
 
     def save(self):

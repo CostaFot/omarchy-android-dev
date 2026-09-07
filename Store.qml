@@ -78,6 +78,9 @@ QtObject {
   // fired from this machine, newest first (10 kept by the helper).
   property string lastPackage: ""
   property var recentDeeplinks: []
+  // The folders an APK was installed from, newest first (10 kept by the
+  // helper), as [{path, path_text}]: the APKs page's folder rows.
+  property var recentApkDirs: []
   property var toggles: null
   // The last `apk list` document (dir, exists, apks[]) and the last `tools`
   // one (what is installed, the AVDs with Running or Stopped).
@@ -337,6 +340,7 @@ QtObject {
     if (d.command === "tools" && Array.isArray(d.avds)) toolsInfo = d
     if (d.command === "wireless" && d.mdns && typeof d.mdns === "object") wirelessInfo = d
     if (Array.isArray(d.recent_deeplinks)) recentDeeplinks = d.recent_deeplinks
+    if (Array.isArray(d.recent_apk_dirs)) recentApkDirs = d.recent_apk_dirs
     if (d.last_package !== undefined) lastPackage = d.last_package ? String(d.last_package) : ""
     if (d.command === "package" && d.ok !== false && d.name) {
       var details = Object.assign({}, packageDetails)

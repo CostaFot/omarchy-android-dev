@@ -40,7 +40,7 @@ SETTING_DEFAULTS = {
 }
 
 HELP = [
-    ("status", "adb path and source, devices, selected device, last package, recent deep links, tools, versions"),
+    ("status", "adb path and source, devices, selected device, last package, recent deep links, recent APK folders, tools, versions"),
     ("devices", "attached devices with labels; the selected one marked"),
     ("select SERIAL", "remember SERIAL as the selected device"),
     ("track", "stream one JSON line per device change (adb track-devices)"),
@@ -262,6 +262,7 @@ def cmd_status(ctx, args):
         "selected": None,
         "last_package": None,
         "recent_deeplinks": ctx.state.recent_deeplinks,
+        "recent_apk_dirs": apkmod.recent_dirs(ctx.state),
     }
     try:
         ctx.require_adb()
@@ -389,20 +390,42 @@ def cmd_toggle(ctx, args):
     return togmod.flip(adb, serial, args[0], want)
 
 
+def _remember_apk_dirs(ctx, paths):
+    """The folders an install ran from, added once it has: this run has held
+    its state snapshot since it started, and an install is the one command
+    long enough (120 s a file) for another run's `select` to be written and
+    then overwritten by `save()`. `reload()` takes what they wrote (nothing
+    in this path has dirtied the document), then the folders go in."""
+    ctx.state.reload()
+    for path in paths:
+        ctx.state.add_apk_dir(apkmod.dir_of(path))
+    return apkmod.recent_dirs(ctx.state)
+
+
 def cmd_apk(ctx, args):
+    """Both verbs carry `recent_apk_dirs`, the page's folder rows; only an
+    install adds to it (a listing would remember every folder typed past)."""
     usage = "apk list [DIR] | apk install PATH..."
     if not args:
         raise BadArgs(usage)
     if args[0] == "list":
         if len(args) > 2:
             raise BadArgs(usage)
-        return apkmod.list_apks(apkmod.apk_dir(ctx.settings, args[1] if len(args) == 2 else None))
+        payload = apkmod.list_apks(apkmod.apk_dir(ctx.settings, args[1] if len(args) == 2 else None))
+        payload["recent_apk_dirs"] = apkmod.recent_dirs(ctx.state)
+        return payload
     if args[0] == "install":
         if len(args) < 2:
             raise BadArgs(usage)
         paths = [apkmod.check_path(p) for p in args[1:]]
         adb, serial = ctx.device()
-        return apkmod.install(adb, serial, paths)
+        try:
+            payload = apkmod.install(adb, serial, paths)
+        except PartialError as e:  # a file adb refused: the folder is still the folder
+            e.payload["recent_apk_dirs"] = _remember_apk_dirs(ctx, paths)
+            raise
+        payload["recent_apk_dirs"] = _remember_apk_dirs(ctx, paths)
+        return payload
     raise BadArgs(usage)
 
 

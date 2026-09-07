@@ -1,13 +1,17 @@
 """apk.py: the folder listing and the sequential install, with the results
 per file and the failure text out of adb's line."""
 
+import json
 import os
+import subprocess
+import sys
+import time
 import unittest
 
 import _paths  # noqa: F401
-from _paths import FAKE_ADB, SERIAL, FakeAdbCase
+from _paths import FAKE_ADB, HELPER, SERIAL, FakeAdbCase
 
-from androiddev import apk
+from androiddev import apk, fmt
 from androiddev.adb import Adb, AdbError, PartialError
 from androiddev.cli import Settings
 
@@ -127,6 +131,125 @@ class Install(FakeAdbCase):
         self.assertEqual(doc["installed"], 0)
         self.assertEqual(len(doc["results"]), 2)
         self.assertEqual(doc["error"]["code"], "adb_failed")
+
+
+class RecentFolders(FakeAdbCase):
+    """The folders installed from, remembered like the recent deep links."""
+
+    def setUp(self):
+        super().setUp()
+        self.dir = os.path.join(self.tmp.name, "apks")
+        self.other = os.path.join(self.tmp.name, "nightly")
+        for d in (self.dir, self.other):
+            os.makedirs(d)
+            with open(os.path.join(d, "a.apk"), "wb") as f:
+                f.write(b"PK")
+
+    def test_an_install_remembers_the_folder_and_a_listing_does_not(self):
+        self.add_rules({"match": "install -r -t", "stdout": SUCCESS})
+        self.assertEqual(self.run_cli("apk", "list", self.dir)["recent_apk_dirs"], [])
+        doc = self.run_cli("apk", "install", os.path.join(self.dir, "a.apk"))
+        self.assertTrue(doc["ok"])
+        self.assertEqual([d["path"] for d in doc["recent_apk_dirs"]], [self.dir])
+        # And it rides on every document the page and the hub read.
+        self.assertEqual([d["path"] for d in self.run_cli("apk", "list", self.other)["recent_apk_dirs"]], [self.dir])
+        self.assertEqual([d["path"] for d in self.run_cli("status")["recent_apk_dirs"]], [self.dir])
+        self.assertIn("path_text", self.run_cli("status")["recent_apk_dirs"][0])
+
+    def test_newest_first_without_repeats(self):
+        self.add_rules({"match": "install -r -t", "stdout": SUCCESS})
+        self.run_cli("apk", "install", os.path.join(self.dir, "a.apk"))
+        self.run_cli("apk", "install", os.path.join(self.other, "a.apk"))
+        doc = self.run_cli("apk", "install", os.path.join(self.dir, "a.apk"))
+        self.assertEqual([d["path"] for d in doc["recent_apk_dirs"]], [self.dir, self.other])
+
+    def test_a_failed_install_remembers_the_folder_too(self):
+        self.add_rules({"match": "install -r -t", "stdout": "", "stderr": FAILURE, "code": 1})
+        doc = self.run_cli("apk", "install", os.path.join(self.dir, "a.apk"))
+        self.assertFalse(doc["ok"])
+        self.assertEqual([d["path"] for d in doc["recent_apk_dirs"]], [self.dir])
+
+    def test_nothing_is_remembered_when_the_path_is_refused(self):
+        doc = self.run_cli("apk", "install", os.path.join(self.dir, "missing.apk"))
+        self.assertEqual(doc["error"]["code"], "bad_args")
+        self.assertEqual(self.run_cli("apk", "list", self.dir)["recent_apk_dirs"], [])
+
+    def test_the_folder_is_absolute_whatever_was_typed(self):
+        self.assertEqual(apk.dir_of("b.apk"), os.getcwd())
+        self.assertEqual(apk.dir_of("~/apks/b.apk"), os.path.expanduser("~/apks"))
+        self.assertEqual(apk.dir_of(os.path.join(self.dir, "a.apk")), self.dir)
+
+    def test_the_listed_dir_is_the_string_the_remembered_folder_is_matched_on(self):
+        # The page hides the folder on screen by comparing `dir` with a
+        # remembered `path`; a trailing slash or a `..` must not split them.
+        self.add_rules({"match": "install -r -t", "stdout": SUCCESS})
+        self.run_cli("apk", "install", os.path.join(self.dir, "a.apk"))
+        for typed in (self.dir + "/", self.dir + "//", os.path.join(self.dir, "..", "apks")):
+            self.assertEqual(self.run_cli("apk", "list", typed)["dir"], self.dir)
+        self.assertEqual(apk.apk_dir(Settings({"apkDir": self.dir + "/"})), self.dir)
+
+    def test_the_folder_text_the_page_hands_back_lists_the_same_folder(self):
+        # `path_text` goes into the folder box, so `apk list path_text` has
+        # to reach the folder `path` names, home prefix or not.
+        home = os.path.join(self.tmp.name, "home")
+        sibling = os.path.join(self.tmp.name, "home-backup", "apks")
+        for d in (os.path.join(home, "apks"), sibling):
+            os.makedirs(d)
+            with open(os.path.join(d, "a.apk"), "wb") as f:
+                f.write(b"PK")
+        self.add_rules({"match": "install -r -t", "stdout": SUCCESS})
+        env = {"HOME": home}
+        for folder in (os.path.join(home, "apks"), sibling):
+            doc = self.run_cli("apk", "install", os.path.join(folder, "a.apk"), env=env)
+            entry = doc["recent_apk_dirs"][0]
+            self.assertEqual(entry["path"], folder)
+            listed = self.run_cli("apk", "list", entry["path_text"], env=env)
+            self.assertEqual(listed["dir"], folder)
+            self.assertTrue(listed["exists"])
+            self.assertEqual(listed["count"], 1)
+        saved = os.environ["HOME"]
+        os.environ["HOME"] = home
+        try:
+            self.assertEqual(fmt.display_path(os.path.join(home, "apks")), "~/apks")
+            self.assertEqual(fmt.display_path(home), "~")
+            self.assertEqual(fmt.display_path(sibling), sibling)  # a sibling of the home dir is not under it
+        finally:
+            os.environ["HOME"] = saved
+
+    def test_nothing_is_remembered_without_a_device(self):
+        self.add_rules({"match": "devices -l", "stdout": "List of devices attached\n"})
+        doc = self.run_cli("apk", "install", os.path.join(self.dir, "a.apk"))
+        self.assertEqual(doc["error"]["code"], "no_device")
+        self.assertNotIn("recent_apk_dirs", doc)
+        self.assertEqual(self.run_cli("apk", "list", self.dir)["recent_apk_dirs"], [])
+        self.assertFalse(any("install" in c for c in self.joined_calls()))
+
+    def test_several_folders_in_one_install_are_remembered_in_order(self):
+        self.add_rules({"match": "install -r -t", "stdout": SUCCESS})
+        doc = self.run_cli("apk", "install", os.path.join(self.dir, "a.apk"), os.path.join(self.other, "a.apk"))
+        self.assertTrue(doc["ok"])
+        self.assertEqual([d["path"] for d in doc["recent_apk_dirs"]], [self.other, self.dir])
+
+    def test_what_another_run_wrote_during_the_install_survives(self):
+        # The run holds its state snapshot from the start and an install is
+        # long; the folders are added to a fresh read, never to that snapshot.
+        self.add_rules({"match": "install -r -t", "stdout": SUCCESS, "sleep": 2})
+        proc = subprocess.Popen([sys.executable, HELPER, "apk", "install", os.path.join(self.dir, "a.apk")],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=dict(os.environ))
+        try:
+            time.sleep(0.8)
+            self.assertEqual(self.run_cli("select", SERIAL)["selected"], SERIAL)
+            out, err = proc.communicate(timeout=30)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.communicate()
+        self.assertEqual(proc.returncode, 0, err)
+        self.assertTrue(json.loads(out.splitlines()[-1])["ok"])
+        with open(os.path.join(self.state_dir, "state.json"), encoding="utf-8") as f:
+            state = json.load(f)
+        self.assertEqual(state["selected"], SERIAL)
+        self.assertEqual(state["recent_apk_dirs"], [self.dir])
 
 
 if __name__ == "__main__":

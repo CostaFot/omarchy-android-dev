@@ -62,7 +62,7 @@ It opens on a hub: the selected device with its state, then the pages. Every pag
 <img src="assets/screenshots/apks-installed.png" width="300" alt="the same folder after Install all">
 </p>
 
-**APKs** is a folder box, prefilled from the *APK folder* setting (`~/Downloads`), listing the `.apk` files in it as you type. Enter on one installs it (`adb install -r -t`, so a debug build marked testOnly installs too) and the row says Installed or quotes adb's `Failure [...]`. *Install all* runs them one after another and sends one notification for the batch.
+**APKs** is a folder box, prefilled from the *APK folder* setting (`~/Downloads`), listing the `.apk` files in it as you type. Enter on one installs it (`adb install -r -t`, so a debug build marked testOnly installs too) and the row says Installed or quotes adb's `Failure [...]`. *Install all* runs them one after another and sends one notification for the batch. The folders you have installed from are rows under the list, newest first, ten of them: Enter on one puts it back in the box.
 
 <img src="assets/screenshots/text.png" width="300" alt="the send text page">
 
@@ -195,7 +195,7 @@ Emulators show up by their AVD name, as in `Pixel 10 Pro Fold (emulator-5554)`.
 
 The shell never runs `adb` itself. A Python 3 helper with no dependencies does, started as `/usr/bin/python3` with an argument list, never through a shell string; every adb call is an argument list too, with `-s SERIAL` on every device command, a deadline and a size cap on what it reads back, and a child that outruns either is stopped and reported, never parsed. One device tracker (`adb track-devices`) runs per shell and is restarted with backoff when adb goes away. The plugin never kills a process it did not start: scrcpy, the emulator and the logcat terminal are started detached, the way Omarchy's own launchers start apps, and are left alone; an emulator stops through `adb emu kill`. scrcpy is told to use the same `adb` as the plugin, so a second adb on `PATH` (the `scrcpy` package installs one) changes nothing.
 
-State lives in `~/.local/state/omarchy/costafot.android-dev/`: the selected device, the last package per device, the recent deep links, a package cache, and, while a pairing code is up, its PNG (readable by you alone, removed when the session ends). The directory is private to your user and checked on every run; files are written atomically and read through descriptors that refuse symlinks. Settings live on the plugin's entry in your `shell.json` and nowhere else. A pairing code goes to `adb pair` on its stdin, never on a command line where `ps` would show it.
+State lives in `~/.local/state/omarchy/costafot.android-dev/`: the selected device, the last package per device, the recent deep links, the folders you have installed APKs from, a package cache, and, while a pairing code is up, its PNG (readable by you alone, removed when the session ends). The directory is private to your user and checked on every run; files are written atomically and read through descriptors that refuse symlinks. Settings live on the plugin's entry in your `shell.json` and nowhere else. A pairing code goes to `adb pair` on its stdin, never on a command line where `ps` would show it.
 
 **Leaves your machine:** nothing beyond your own network. `adb` talks to its own server on `127.0.0.1:5037` and to your device, over USB or, for a Wi-Fi device, to the phone's address on your LAN; adb's mDNS discovery is multicast on that LAN. The plugin makes no network request of its own.
 

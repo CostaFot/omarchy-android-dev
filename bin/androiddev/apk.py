@@ -1,7 +1,12 @@
 """The APK manager: the `.apk` files in a folder, and installing them one
 at a time with `adb install -r -t PATH` (`-t` so a debug build marked
 testOnly installs too; Windows used `-r` alone). Every path is one argv
-entry; nothing here is quoted into a shell string."""
+entry; nothing here is quoted into a shell string.
+
+A folder installed from is remembered in state.json (like the recent deep
+links) and rides back on every `apk list` and on the answer to an install
+that ran, so the page can offer it as a row; listing a folder remembers
+nothing, or half a path typed past a real folder would land in the list."""
 
 import os
 import re
@@ -14,8 +19,11 @@ _FAILURE = re.compile(r"Failure \[[^\]]*\]")
 
 
 def apk_dir(settings, arg=None):
+    """The folder to list, canonical: `abspath` after `~` so a trailing
+    slash or a `..` cannot make `dir` differ from the `dir_of` the same
+    folder is remembered under (the panel joins the two on that string)."""
     configured = str(arg if arg is not None else (settings.get("apkDir") or "~/Downloads")).strip() or "~/Downloads"
-    return os.path.expanduser(configured)
+    return os.path.abspath(os.path.expanduser(configured))
 
 
 def list_apks(directory):
@@ -58,6 +66,17 @@ def list_apks(directory):
         "count": len(apks),
         "truncated": truncated,
     }
+
+
+def dir_of(path):
+    """The folder an install came from, absolute (a relative path on the
+    command line is resolved against the cwd, never remembered as is)."""
+    return os.path.dirname(os.path.abspath(os.path.expanduser(str(path or ""))))
+
+
+def recent_dirs(state):
+    """The folders installed from, newest first: `[{path, path_text}]`."""
+    return [{"path": d, "path_text": fmt.display_path(d)} for d in state.recent_apk_dirs]
 
 
 def check_path(path):

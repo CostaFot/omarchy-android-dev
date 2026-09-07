@@ -460,7 +460,8 @@ Panel {
   // The folder field lists on the fly (debounced); Enter on a file installs
   // it, Install all runs the files one after another through the service,
   // each its own helper run with its own budget. Results live here, per
-  // panel, until the folder changes or `r`.
+  // panel, until the folder changes or `r`. The folders installed from
+  // before are rows at the foot, from the helper's state.
   property var apkResults: ({})
   property string apkInstalling: ""
   property var apkQueue: []
@@ -538,37 +539,57 @@ Panel {
     var reading = s.busy && s.runningCommand === "apk" && apkInstalling === ""
     if (!list) {
       out.push({ type: "note", label: reading ? "Reading the folder…" : "Type a folder path", detail: "The .apk files in it are listed here." })
-      return out
-    }
-    if (!list.exists) {
+    } else if (!list.exists) {
       out.push({ type: "note", urgent: true, label: "Folder not found", detail: list.dir_text || "" })
-      return out
-    }
-    if (list.count === 0) {
+    } else if (list.count === 0) {
       out.push({ type: "note", label: "No .apk files in this folder", detail: list.dir_text || "" })
-      return out
+    } else {
+      var paths = []
+      for (var p = 0; p < list.apks.length; p++) paths.push(list.apks[p].path)
+      if (apkInstalling !== "" && apkBatchTotal > 1) {
+        var done = 0
+        for (var k in apkResults) done++
+        out.push({ type: "note", icon: "\uf019", label: "Installing… (" + done + "/" + apkBatchTotal + ")", detail: list.dir_text || "" })
+      } else if (list.count > 1) {
+        out.push({ type: "action", icon: "\uf019", label: "Install all", detail: list.count + " APKs · adb install -r -t, one after another",
+                   action: "installall", paths: paths })
+      }
+      for (var i = 0; i < list.apks.length; i++) {
+        var a = list.apks[i]
+        var r = apkResults[a.path]
+        var icon = "\uf1b2", detail = a.size_text || "", urgent = false
+        if (a.path === apkInstalling) { icon = "\uf017"; detail = "Installing…" }
+        else if (r && r.ok) { icon = "\uf00c"; detail = "Installed" }
+        else if (r) { icon = "\uf00d"; detail = r.message; urgent = true }
+        out.push({ type: "action", icon: icon, label: a.name, detail: detail, action: "install", path: a.path, urgent: urgent })
+      }
+      if (list.truncated) out.push({ type: "note", label: "Only the first " + list.count + " files are listed" })
     }
-    var paths = []
-    for (var p = 0; p < list.apks.length; p++) paths.push(list.apks[p].path)
-    if (apkInstalling !== "" && apkBatchTotal > 1) {
-      var done = 0
-      for (var k in apkResults) done++
-      out.push({ type: "note", icon: "\uf019", label: "Installing… (" + done + "/" + apkBatchTotal + ")", detail: list.dir_text || "" })
-    } else if (list.count > 1) {
-      out.push({ type: "action", icon: "\uf019", label: "Install all", detail: list.count + " APKs · adb install -r -t, one after another",
-                 action: "installall", paths: paths })
-    }
-    for (var i = 0; i < list.apks.length; i++) {
-      var a = list.apks[i]
-      var r = apkResults[a.path]
-      var icon = "\uf1b2", detail = a.size_text || "", urgent = false
-      if (a.path === apkInstalling) { icon = "\uf017"; detail = "Installing…" }
-      else if (r && r.ok) { icon = "\uf00c"; detail = "Installed" }
-      else if (r) { icon = "\uf00d"; detail = r.message; urgent = true }
-      out.push({ type: "action", icon: icon, label: a.name, detail: detail, action: "install", path: a.path, urgent: urgent })
-    }
-    if (list.truncated) out.push({ type: "note", label: "Only the first " + list.count + " files are listed" })
+    appendApkFolders(out, list ? String(list.dir || "") : "")
     return out
+  }
+
+  // The folders an APK was installed from, from the helper's state: a row
+  // each at the foot, Enter puts one in the box. The folder on screen is
+  // not among them, and none of them shows while an install runs (Enter
+  // there would change the folder mid-install).
+  function samePath(a, b) {
+    return a.replace(/\/+$/, "") === b.replace(/\/+$/, "")
+  }
+
+  function appendApkFolders(out, currentDir) {
+    if (apkInstalling !== "") return
+    var recent = root.store ? root.store.recentApkDirs : []
+    if (!recent || recent.length === 0) return
+    var shown = 0
+    for (var i = 0; i < recent.length; i++) {
+      var d = recent[i]
+      var text = d && d.path_text ? String(d.path_text) : ""
+      if (!d || !d.path || text === "" || samePath(String(d.path), currentDir)) continue
+      if (shown === 0) out.push({ type: "header", label: "Recent folders" })
+      shown++
+      out.push({ type: "action", icon: "\uf07b", label: text, detail: "Enter lists this folder", action: "apkdir", dir: text })
+    }
   }
 
   // ---- Send text ----------------------------------------------------------
@@ -758,7 +779,7 @@ Panel {
     if (page === "deeplink") return "Type a URL, Enter launches · ↑/↓ recent · Esc back"
     if (page === "toggles") return "j/k move · Enter flips · r reads again · Esc back"
     if (page === "capture") return "j/k move · Enter runs it · Esc back"
-    if (page === "apks") return "Type a folder · ↑/↓ move · Enter installs · r lists again · Esc back"
+    if (page === "apks") return "Type a folder · Enter installs or opens · r lists again · Esc back"
     if (page === "text") return "Type a line, Enter sends it · ↑/↓ move · Esc back"
     if (page === "tools") return "j/k move · Enter runs it · r reads again · Esc back"
     if (page === "wireless") return "j/k move · Enter runs it · r looks again · Esc back"
@@ -1067,6 +1088,7 @@ Panel {
     else if (row.action === "toggle") act(["toggle", row.name])
     else if (row.action === "screenshot") act(["screenshot"])
     else if (row.action === "record") { if (service && typeof service.toggleRecording === "function") service.toggleRecording() }
+    else if (row.action === "apkdir") filterField.text = row.dir  // the folder box; the list follows, debounced
     else if (row.action === "install") installApks([row.path])
     else if (row.action === "installall") installApks(row.paths)
     else if (row.action === "text") act(["text", "send", row.text])
@@ -1124,6 +1146,18 @@ Panel {
     if (!row) return
     if (row.action === "avdstop") act(["tool", "avd-stop", row.serial], function() { if (root.page === "tools") root.store.refreshTools() })
     else if (row.pkg) uninstall(row.pkg)
+  }
+
+  // A folder's listing lands: the cursor goes to its first row and the list
+  // scrolls to it. The rows under the old cursor are another folder's files,
+  // and Enter installs.
+  Connections {
+    target: root.store
+    function onApkListChanged() {
+      if (!root.opened || root.page !== "apks") return
+      root.selectedIndex = root.firstCursorIndex()
+      Qt.callLater(function() { root.ensureCursorVisible() })  // after the Repeater has laid the rows out
+    }
   }
 
   // The Running/Stopped state of the AVD rows follows the tracker: a stopped

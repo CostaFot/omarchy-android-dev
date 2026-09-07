@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.0
+
+The folders you install from, kept (board issue COS-80).
+
+- Added: the folders an APK has been installed from are rows at the foot of the APKs page, newest first, ten of them kept. Enter on one puts it in the folder box and the listing follows. Until now the box was prefilled with the *APK folder* setting and a folder typed over it lived only as long as the page stayed on the stack, so a second APK out of a build directory meant typing the whole path again. They sit in `state.json` beside the recent deep links and ride on `apk list`, on `status` and on the answer to an install as `recent_apk_dirs[{path, path_text}]`.
+- A folder is remembered when an install has run from it, never when it is listed: the page lists as you type, and a listing that remembered would fill the section with every folder a path was typed past. An APK adb refused remembers its folder too, since a failed install says nothing about where the file came from; a refused path or no device remembers nothing. The folder on screen is not offered back, and no folder row shows while an install runs.
+- Fixed: `display_path` turned any path merely sharing the home prefix into a `~` one (`/home/x-backup/apks` → `~-backup/apks`), which never expanded back. It has always been display-only; a folder row hands it back as the folder to list, so the separator is required now.
+- Tests: 216.
+
 ## 1.5.0
 
 The Wireless page and a VPN in the way (board issue COS-77).

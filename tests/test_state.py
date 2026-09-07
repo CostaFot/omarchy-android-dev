@@ -93,6 +93,26 @@ class Files(FakeAdbCase):
         self.assertEqual(s2.recent_deeplinks[0], "https://example.com/11")
         self.assertEqual(s2.last_package("emulator-5554"), "com.foo")
 
+    def test_recent_apk_folders(self):
+        s = State()
+        for i in range(12):
+            s.add_apk_dir(f"/home/x/apks/{i}")
+        s.add_apk_dir("/home/x/apks/3")  # again: to the front, not twice
+        s.add_apk_dir("")                # nothing to remember
+        s.add_apk_dir("/home/x/" + "d" * 300)  # a path longer than one field is not remembered cut short
+        s.save()
+        s2 = State()
+        self.assertEqual(len(s2.recent_apk_dirs), 10)
+        self.assertEqual(s2.recent_apk_dirs[0], "/home/x/apks/3")
+        self.assertEqual(s2.recent_apk_dirs.count("/home/x/apks/3"), 1)
+        self.assertFalse(any(len(d) > 256 for d in s2.recent_apk_dirs))
+
+    def test_junk_in_the_recent_folders_is_ignored(self):
+        os.makedirs(self.state_dir, mode=0o700)
+        with open(os.path.join(self.state_dir, "state.json"), "w") as f:
+            json.dump({"recent_apk_dirs": ["/home/x/apks", 7, None, "", {"path": "/y"}]}, f)
+        self.assertEqual(State().recent_apk_dirs, ["/home/x/apks"])
+
     def test_pairing_files_are_swept(self):
         s = State()
         path = s.pairing_png_path()

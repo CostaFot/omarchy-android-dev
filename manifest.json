@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "costafot.android-dev",
   "name": "Android Dev",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "author": "CostaFot",
   "license": "MIT",
   "description": "The Android developer's side of a device, on the bar: adb devices, packages and their actions, developer toggles, screenshots, deep links, APKs, the emulator, scrcpy and logcat, wireless debugging.",
@@ -19,7 +19,7 @@
   },
   "barWidget": {
     "displayName": "Android Dev",
-    "description": "adb for the Android developer: devices, packages, toggles, screenshots, APKs, emulators. Click for the panel; the same pages open as a window too.",
+    "description": "adb for the Android developer: devices, packages, toggles, screenshots, APKs, emulators. Left click for the panel, right click for the window; the Open as a window setting swaps them.",
     "category": "Development",
     "aliases": [
       "adb",
@@ -38,7 +38,8 @@
       "notify": true,
       "deviceNotifications": true,
       "confirmUninstall": true,
-      "showSystemApps": false
+      "showSystemApps": false,
+      "openAsWindow": false
     },
     "schema": [
       {
@@ -109,6 +110,13 @@
         "type": "boolean",
         "label": "Show system apps",
         "description": "List every package, not only third-party ones.",
+        "defaultValue": false
+      },
+      {
+        "key": "openAsWindow",
+        "type": "boolean",
+        "label": "Open as a window",
+        "description": "The glyph's left click and the open, toggle and page verbs open the window instead of the popup; right click opens the popup then.",
         "defaultValue": false
       }
     ]

@@ -37,6 +37,7 @@ SETTING_DEFAULTS = {
     "deviceNotifications": True,
     "confirmUninstall": True,
     "showSystemApps": False,
+    "openAsWindow": False,
 }
 
 HELP = [

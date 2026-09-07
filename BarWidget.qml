@@ -5,10 +5,11 @@ import qs.Ui
 // Bar widget for Android Dev: the droid glyph, the device count when more
 // than one is attached, dimmed with none; red while the selected device
 // waits for authorisation or is offline, and with a dot while a screen
-// recording runs. Click opens the hub (Panel.qml),
-// middle click re-reads adb and the devices. The data lives in the service
-// (one per shell); this widget registers with it as a host so the service
-// can read its settings and open its panel.
+// recording runs. Left click opens the hub (Panel.qml) and right click
+// the window (Window.qml), or the other way round with the Open as a
+// window setting on; middle click re-reads adb and the devices. The
+// data lives in the service (one per shell); this widget registers with
+// it as a host so the service can read its settings and open its panel.
 BarWidget {
   id: root
   moduleName: "costafot.android-dev"
@@ -32,6 +33,10 @@ BarWidget {
   // The page the panel shows, for the service's `status`.
   readonly property string page: devPanel && devPanel.page !== undefined ? String(devPanel.page) : ""
   function refresh() { if (store) store.refreshStatus() }
+  // The `openAsWindow` setting swaps the two clicks; the service owns
+  // the window (the shell's summon), this widget its own popup.
+  readonly property bool openAsWindow: store ? store.openAsWindow === true : false
+  function toggleWindow() { if (svc && typeof svc.toggleWindow === "function") svc.toggleWindow() }
 
   function injectPanel() {
     var target = devPanel
@@ -116,7 +121,8 @@ BarWidget {
 
     onPressed: function(b) {
       if (b === Qt.MiddleButton) root.refresh()
-      else root.togglePanel()
+      else if ((b === Qt.RightButton) === root.openAsWindow) root.togglePanel()
+      else root.toggleWindow()
     }
   }
 }

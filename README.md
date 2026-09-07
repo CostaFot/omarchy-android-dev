@@ -19,7 +19,7 @@ Setting it up from a coding agent? Point it at `~/.config/omarchy/plugins/costaf
 
 A droid glyph. Lit with a device, dimmed without one, red while the selected device waits for authorisation or is offline, red with a dot while a screen recording runs. With more than one device the count sits next to it; the tooltip names the selected device and its state.
 
-* Left click opens the panel
+* Left click opens the panel, right click the window (with *Open as a window* on, the other way round)
 * Middle click reads adb and the devices again
 
 A notification says when a device connects, disconnects or needs authorising (accept the prompt on the phone). "Connects" means *became ready*: an emulator shows up offline for a while first and is announced once it has booted, by its AVD name.
@@ -31,7 +31,7 @@ A notification says when a device connects, disconnects or needs authorising (ac
 <img src="assets/screenshots/devices.png" width="300" alt="the device picker with two emulators">
 </p>
 
-It opens on a hub: the selected device with its state, then the pages. Every page hangs off that device. `j`/`k` or the arrows move, Enter runs, `r` reads the page again, Escape or Backspace goes back a page and Escape on the hub closes. Pages with a box (a filter, a URL, a folder, a line of text) start typing at once; `/` puts the caret back in the box.
+It opens on a hub: the selected device with its state, then the pages, and a last row, *Open as a window*, that closes the popup and opens the same pages as a window. Every page hangs off that device. `j`/`k` or the arrows move, Enter runs, `r` reads the page again, Escape or Backspace goes back a page and Escape on the hub closes. Pages with a box (a filter, a URL, a folder, a line of text) start typing at once; `/` puts the caret back in the box.
 
 **Devices** is the picker: every device adb sees, with its kind (USB, emulator, Wi-Fi) and state, the selected one checked. Enter selects the one the other pages talk to. With one device there is nothing to pick and the plugin uses it.
 
@@ -81,7 +81,7 @@ It opens on a hub: the selected device with its state, then the pages. Every pag
 
 <img src="assets/screenshots/settings.png" width="300" alt="the settings form">
 
-**Settings** is a form: the adb binary, the screenshot, recording and APK folders, the extra scrcpy arguments, and the five switches (mirror with the screen off, notifications, device notifications, confirm uninstall, show system apps). Tab, `j`/`k` and the arrows walk it, Enter edits a field or flips a switch, Save writes what changed to your `shell.json` and the plugin takes it at once, no restart. The hub's Settings row names the adb in use and how it was found.
+**Settings** is a form: the adb binary, the screenshot, recording and APK folders, the extra scrcpy arguments, and the six switches (mirror with the screen off, notifications, device notifications, confirm uninstall, show system apps, open as a window). Tab, `j`/`k` and the arrows walk it, Enter edits a field or flips a switch, Save writes what changed to your `shell.json` and the plugin takes it at once, no restart. The hub's Settings row names the adb in use and how it was found.
 
 Every action shows its result in the panel and sends a notification with the device's name.
 
@@ -89,7 +89,7 @@ Every action shows its result in the panel and sends a notification with the dev
 
 <img src="assets/screenshots/window.png" width="300" alt="the hub as its own window, floated by the rule below">
 
-The same pages as a normal window, for when the panel should stay put: next to the mirror, on its own workspace, under a window rule. `omarchy-shell costafot.android-dev window toggle` opens it and closes it again (`open` and `close` do one or the other; a page name, `window toggles`, opens it on that page). It is a Wayland toplevel titled `Android Dev`, class `org.quickshell`, that Hyprland tiles or floats like any app, resizable, with ordinary keyboard focus: the same keys as the popup, Escape on the hub or the close button closes it. The popup stays the one-key panel; the two can be open at once and show the same device.
+The same pages as a normal window, for when the panel should stay put: next to the mirror, on its own workspace, under a window rule. `omarchy-shell costafot.android-dev window toggle` opens it and closes it again (`open` and `close` do one or the other; a page name, `window toggles`, opens it on that page). It is a Wayland toplevel titled `Android Dev`, class `org.quickshell`, that Hyprland tiles or floats like any app, resizable, with ordinary keyboard focus: the same keys as the popup, Escape on the hub or the close button closes it. The popup stays the one-key panel; the two can be open at once and show the same device. To make the window the one-key surface, turn *Open as a window* on (the `openAsWindow` setting): the glyph's left click and the `open`, `toggle` and `page` verbs then open the window instead of the popup, so one keybinding serves whichever you prefer, and right click on the glyph opens the popup. The hub's *Open as a window* row reaches the window from the popup either way, and `window` stays explicit.
 
 ## Settings
 
@@ -107,6 +107,7 @@ Saved on the plugin's entry in `~/.config/omarchy/shell.json`, from the panel's 
 | `deviceNotifications` | `true` | A notification when a device connects, disconnects or needs authorising. |
 | `confirmUninstall` | `true` | Ask before uninstalling an app. |
 | `showSystemApps` | `false` | List every package on the Apps page, not only third-party ones. |
+| `openAsWindow` | `false` | The glyph's left click and the `open`, `toggle` and `page` verbs open the window instead of the popup; right click on the glyph opens the popup then. |
 
 ## Requirements
 
@@ -118,7 +119,7 @@ A device over USB with USB debugging on, or an emulator, or a phone over Wi-Fi: 
 
 ```bash
 omarchy-shell costafot.android-dev help          # the verbs
-omarchy-shell costafot.android-dev toggle        # the hub
+omarchy-shell costafot.android-dev toggle        # the hub (the window instead, with openAsWindow on)
 omarchy-shell costafot.android-dev status | jq   # adb, devices, the tracker, the settings in force
 omarchy-shell costafot.android-dev screenshot    # saved, on the clipboard, with a notification
 omarchy-shell costafot.android-dev select emulator-5554

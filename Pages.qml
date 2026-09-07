@@ -39,6 +39,8 @@ FocusScope {
   // The popup takes the page the service holds for the widget the shell
   // summoned (`page NAME` over IPC); the window is told its page directly.
   property bool takesServicePage: false
+  // The popup shows the hub's Open as a window row; the window does not.
+  property bool inPopup: false
   readonly property var store: service ? service.store : null
 
   signal closeRequested()
@@ -241,7 +243,17 @@ FocusScope {
       var c = pageRows[i]
       out.push({ type: "action", icon: c.icon, label: c.label, detail: c.page === "settings" ? settingsDetail() : c.detail, page: c.page })
     }
+    if (inPopup)
+      out.push({ type: "action", icon: "\uf2d0", label: "Open as a window",
+                 detail: "The same pages as a window; this popup closes", action: "openwindow" })
     return out
+  }
+
+  // The hub's Open as a window row (the popup alone): the popup closes
+  // and the window opens on the hub through the shell's summon.
+  function openAsWindowRow() {
+    closeRequested()
+    if (service && typeof service.openWindow === "function") service.openWindow("hub")
   }
 
   // The helper says why there is no adb (`No adb at ~/x. Fix the adbPath
@@ -818,14 +830,16 @@ FocusScope {
   // cheaply (tests/test_manifest.py pins the copies together, with the
   // helper's and the store's key lists).
   readonly property var settingsDefaults: ({ adbPath: "", screenshotDir: "", recordingDir: "", apkDir: "~/Downloads", scrcpyArgs: "",
-                                             mirrorScreenOff: false, notify: true, deviceNotifications: true, confirmUninstall: true, showSystemApps: false })
+                                             mirrorScreenOff: false, notify: true, deviceNotifications: true, confirmUninstall: true, showSystemApps: false,
+                                             openAsWindow: false })
   readonly property var settingsTextKeys: ["adbPath", "screenshotDir", "recordingDir", "apkDir", "scrcpyArgs"]
-  readonly property var settingsBoolKeys: ["mirrorScreenOff", "notify", "deviceNotifications", "confirmUninstall", "showSystemApps"]
+  readonly property var settingsBoolKeys: ["mirrorScreenOff", "notify", "deviceNotifications", "confirmUninstall", "showSystemApps", "openAsWindow"]
   property bool pendingMirrorScreenOff: false
   property bool pendingNotify: true
   property bool pendingDeviceNotifications: true
   property bool pendingConfirmUninstall: true
   property bool pendingShowSystemApps: false
+  property bool pendingOpenAsWindow: false
   // The keyboard cursor over the form's controls, in `formControls` order.
   property int formCursor: 0
   // What a text field held when its editor took the keys, for Escape.
@@ -839,13 +853,14 @@ FocusScope {
   function settingFlag(key) { return store ? store.flag(key, settingsDefaults[key]) : settingsDefaults[key] }
 
   readonly property var formFields: [adbPathField, screenshotDirField, recordingDirField, apkDirField, scrcpyArgsField]
-  readonly property var formToggles: [mirrorScreenOffToggle, notifyToggle, deviceNotificationsToggle, confirmUninstallToggle, showSystemAppsToggle]
+  readonly property var formToggles: [mirrorScreenOffToggle, notifyToggle, deviceNotificationsToggle, confirmUninstallToggle, showSystemAppsToggle, openAsWindowToggle]
   readonly property var formControls: formFields.concat(formToggles).concat([saveButton, cancelButton])
 
   function pendingFlag(key) {
     return key === "mirrorScreenOff" ? pendingMirrorScreenOff : key === "notify" ? pendingNotify
       : key === "deviceNotifications" ? pendingDeviceNotifications
-      : key === "confirmUninstall" ? pendingConfirmUninstall : pendingShowSystemApps
+      : key === "confirmUninstall" ? pendingConfirmUninstall
+      : key === "showSystemApps" ? pendingShowSystemApps : pendingOpenAsWindow
   }
 
   function setPendingFlag(key, value) {
@@ -854,6 +869,7 @@ FocusScope {
     else if (key === "deviceNotifications") pendingDeviceNotifications = value
     else if (key === "confirmUninstall") pendingConfirmUninstall = value
     else if (key === "showSystemApps") pendingShowSystemApps = value
+    else if (key === "openAsWindow") pendingOpenAsWindow = value
   }
 
   // The pending values start as what is saved, or the manifest's default.
@@ -1117,6 +1133,7 @@ FocusScope {
     else if (row.action === "logcat") act(["tool", "logcat"].concat(row.pkg ? [row.pkg] : []))
     else if (row.action === "avd") act(["tool", "avd", row.avd], function() { if (root.page === "tools") root.store.refreshTools() })
     else if (row.action === "avdstop") openConfirm(row)
+    else if (row.action === "openwindow") openAsWindowRow()
     else if (row.page) push({ page: row.page })
   }
 
@@ -1785,6 +1802,20 @@ FocusScope {
           onHovered: function(on) { if (on) root.formCursor = 9 }
           onClicked: { root.formCursor = 9; root.pendingShowSystemApps = !root.pendingShowSystemApps }
         }
+
+        Toggle {
+          id: openAsWindowToggle
+          width: parent.width
+          label: "Open as a window"
+          description: "The bar glyph's left click and the open, toggle and page verbs open the window instead of the popup; right click opens the popup then."
+          checked: root.pendingOpenAsWindow
+          foreground: root.contentForeground
+          fontFamily: root.contentFontFamily
+          activeFocusOnTab: false
+          hasCursor: root.formCursor === 10
+          onHovered: function(on) { if (on) root.formCursor = 10 }
+          onClicked: { root.formCursor = 10; root.pendingOpenAsWindow = !root.pendingOpenAsWindow }
+        }
       }
     }
 
@@ -1814,8 +1845,8 @@ FocusScope {
           bordered: true
           foreground: root.contentForeground
           fontFamily: root.contentFontFamily
-          hasCursor: root.formCursor === 10
-          onHovered: function(on) { if (on) root.formCursor = 10 }
+          hasCursor: root.formCursor === 11
+          onHovered: function(on) { if (on) root.formCursor = 11 }
           onClicked: root.saveSettings()
         }
 
@@ -1824,8 +1855,8 @@ FocusScope {
           text: "Cancel"
           foreground: root.mutedForeground
           fontFamily: root.contentFontFamily
-          hasCursor: root.formCursor === 11
-          onHovered: function(on) { if (on) root.formCursor = 11 }
+          hasCursor: root.formCursor === 12
+          onHovered: function(on) { if (on) root.formCursor = 12 }
           onClicked: root.pop()
         }
       }

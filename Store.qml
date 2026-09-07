@@ -30,7 +30,7 @@ QtObject {
   // The scalars the helper understands (cli.SETTING_DEFAULTS). Keys it does
   // not know are ignored on its side, so this list can lead the helper.
   readonly property var helperSettingKeys: ["adbPath", "screenshotDir", "recordingDir", "apkDir", "scrcpyArgs",
-                                            "mirrorScreenOff", "notify", "deviceNotifications", "confirmUninstall", "showSystemApps"]
+                                            "mirrorScreenOff", "notify", "deviceNotifications", "confirmUninstall", "showSystemApps", "openAsWindow"]
 
   // Serialised once so a re-injection of identical settings (every remount
   // does one) changes nothing downstream.
@@ -58,6 +58,9 @@ QtObject {
 
   readonly property bool notifyEnabled: flag("notify", true)
   readonly property bool deviceNotifications: flag("deviceNotifications", true)
+  // The one-key surface: the window instead of the popup (the service
+  // and the bar widget route on it; the helper ignores it).
+  readonly property bool openAsWindow: flag("openAsWindow", false)
 
   // ---- What the helper said ----------------------------------------------
   // Each section is replaced by the newest document that carries it and

@@ -130,6 +130,27 @@ class ManifestMatchesTheQml(unittest.TestCase):
             self.assertNotIn(f'action: "{verb}"', self.panel, verb)
         self.assertNotIn("Plugged phones", self.panel)
 
+    def test_open_as_window_is_wired(self):
+        # The `openAsWindow` setting (1.8.0): the glyph's two clicks and the
+        # one-key verbs pick their surface through the service, the window
+        # verb stays explicit, and the hub's Open as a window row is the
+        # popup's alone (the window never shows it).
+        self.assertIs(SETTING_DEFAULTS["openAsWindow"], False)
+        self.assertIn('flag("openAsWindow", false)', self.store)
+        for fn in ("openMain", "closeMain", "toggleMain", "toggleOther", "showPageMain"):
+            self.assertIn(f"function {fn}(", self.service, fn)
+        for verb, fn in (("open", "openMain"), ("show", "openMain"), ("close", "closeMain"), ("hide", "closeMain"),
+                         ("toggle", "toggleMain"), ("page", "showPageMain")):
+            self.assertRegex(self.service, rf"function {verb}\([^)]*\): string \{{ return root\.{fn}\(", verb)
+        self.assertIn("function window(mode: string): string { return root.windowVerb(mode) }", self.service)
+        widget = read("BarWidget.qml")
+        self.assertIn("Qt.RightButton", widget)
+        self.assertIn("root.openAsWindow", widget)
+        self.assertIn('action: "openwindow"', self.panel)
+        self.assertIn("if (inPopup)", self.panel)
+        self.assertIn("inPopup: true", read("Panel.qml"))
+        self.assertNotIn("inPopup", read("Window.qml"))
+
     def test_help_names_every_setting(self):
         for key in SETTING_DEFAULTS:
             self.assertIn(key, self.service, key)

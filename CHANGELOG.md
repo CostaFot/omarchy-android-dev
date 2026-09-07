@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.0
+
+The window from the bar and the hub (board issue COS-113).
+
+- Added: the *Open as a window* setting (`openAsWindow`, off by default), on the Settings page and through `omarchy bar set`. With it on, the bar glyph's left click and the `open`, `close`, `toggle` and `page` verbs open the window instead of the popup, so one keybinding serves whichever you prefer. Right click on the glyph opens the other surface (the window with the setting off, the popup with it on), so neither is ever out of reach; middle click keeps re-reading adb. The `window` verb stays explicit either way, and `status.settings` shows the value.
+- Added: a hub row, *Open as a window*, at the foot of the popup's page list: Enter closes the popup and opens the window on the hub. The window does not show it.
+- Tests: 224.
+
 ## 1.7.0
 
 The panel as its own window (board issue COS-97).

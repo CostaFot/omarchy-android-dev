@@ -562,6 +562,23 @@ Item {
 
   readonly property string windowPage: windowHost && windowHost.page !== undefined ? String(windowHost.page) : ""
 
+  // ---- Which surface the one-key verbs open ---------------------------------
+  // With the `openAsWindow` setting on, `open`, `close`, `toggle` and
+  // `page` (and the glyph's left click) address the window and the popup
+  // is the other surface (the glyph's right click); off, the popup is the
+  // main one and the window the other. The `window` verb is explicit
+  // either way. An unknown page name opens the hub, as the popup does.
+  readonly property bool openAsWindow: store.openAsWindow
+  function openMain() { return openAsWindow ? openWindow("") : openPanel() }
+  function closeMain() { return openAsWindow ? closeWindow() : closePanel() }
+  function toggleMain() { return openAsWindow ? toggleWindow() : togglePanel() }
+  function toggleOther() { return openAsWindow ? togglePanel() : toggleWindow() }
+  function showPageMain(name) {
+    if (!openAsWindow) return showPage(name)
+    var m = String(name || "").trim().toLowerCase()
+    return openWindow(pageNames.indexOf(m) !== -1 ? m : "hub")
+  }
+
   // The page the open panel shows (the first host's when none is open).
   readonly property string panelPage: {
     var target = null
@@ -599,9 +616,9 @@ Item {
   readonly property var helpLines: [
     "omarchy-shell costafot.android-dev <verb> [args]",
     "  help                 this list",
-    "  open | close | toggle  the panel (show/hide are aliases)",
+    "  open | close | toggle  the panel, or the window with the openAsWindow setting on (show/hide are aliases)",
     "  page NAME            open the panel on a page: hub devices packages deeplink toggles capture apks text tools wireless settings",
-    "  window open|close|toggle|PAGE  the same pages as their own window (a toplevel Hyprland tiles or floats); a page name opens it there",
+    "  window open|close|toggle|PAGE  the same pages as their own window (a toplevel Hyprland tiles or floats); a page name opens it there; explicit whatever the setting",
     "  status               one JSON line: adb, settings, devices, tracker, recording, pairing, the open page, the window, errors",
     "  devices              one JSON line: the attached devices",
     "  select SERIAL        make SERIAL the selected device",
@@ -622,7 +639,7 @@ Item {
     "  refresh              re-read adb and the device list",
     "Action verbs return at once; the result arrives as a notification and in the panel.",
     "Settings: the panel's Settings page, or `omarchy bar set costafot.android-dev KEY VALUE` (adbPath screenshotDir",
-    "recordingDir apkDir scrcpyArgs mirrorScreenOff notify deviceNotifications confirmUninstall showSystemApps); both apply at once."
+    "recordingDir apkDir scrcpyArgs mirrorScreenOff notify deviceNotifications confirmUninstall showSystemApps openAsWindow); both apply at once."
   ]
 
   //   omarchy-shell costafot.android-dev help
@@ -635,12 +652,12 @@ Item {
   IpcHandler {
     target: "costafot.android-dev"
     function help(): string { return root.helpLines.join("\n") }
-    function open(): string { return root.openPanel() }
-    function show(): string { return root.openPanel() }
-    function close(): string { return root.closePanel() }
-    function hide(): string { return root.closePanel() }
-    function toggle(): string { return root.togglePanel() }
-    function page(name: string): string { return root.showPage(name) }
+    function open(): string { return root.openMain() }
+    function show(): string { return root.openMain() }
+    function close(): string { return root.closeMain() }
+    function hide(): string { return root.closeMain() }
+    function toggle(): string { return root.toggleMain() }
+    function page(name: string): string { return root.showPageMain(name) }
     function window(mode: string): string { return root.windowVerb(mode) }
     function status(): string { return root.statusJson() }
     function devices(): string { return JSON.stringify({ devices: root.store.devices, selected: root.store.selected }) }

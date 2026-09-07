@@ -43,6 +43,7 @@ Panel {
       hostWidget: root.hostWidget
       opened: root.opened
       takesServicePage: true
+      inPopup: true
       contentForeground: root.bar ? root.bar.foreground : Color.foreground
       contentFontFamily: root.bar ? root.bar.fontFamily : Style.font.family
       urgentForeground: root.bar ? root.bar.urgent : Color.urgent

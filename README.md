@@ -150,7 +150,7 @@ The folders follow Omarchy's own (`OMARCHY_SCREENSHOT_DIR`, `OMARCHY_SCREENRECOR
 
 <p>
 <img src="assets/screenshots/apks.png" width="300" alt="the APK folder listing">
-<img src="assets/screenshots/apks-installed.png" width="300" alt="the same folder after Install all">
+<img src="assets/screenshots/apks-after.png" width="300" alt="the same folder after Install all">
 </p>
 
 Prefilled from the *APK folder* setting (`~/Downloads`)/

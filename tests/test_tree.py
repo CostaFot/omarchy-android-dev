@@ -161,6 +161,16 @@ class NoCapabilityTokenInTheTree(unittest.TestCase):
                 self.assertNotRegex(text, r"(?<![\w-])" + re.escape(token) + r"(?![\w-])", f"{name} names {token}")
             self.assertIsNone(self.PIPE_TO_SHELL.search(text), f"{name} pipes a download into a shell")
 
+    def test_no_file_is_named_like_an_installer(self):
+        """The marketplace's security baseline probes every file whose name
+        contains install, installer, setup or uninstall, images included,
+        and fails closed on a binary one; the listing then cannot be
+        approved (seen 2026-09-08 with apks-installed.png)."""
+        names = subprocess.run(["git", "-C", ROOT, "ls-files", "--cached", "--others", "--exclude-standard"],
+                               capture_output=True, text=True, check=True).stdout.split("\n")
+        bad = [n for n in names if re.search(r"install|installer|setup|uninstall", os.path.basename(n), re.I)]
+        self.assertEqual(bad, [])
+
     def test_the_tree_is_what_git_tracks(self):
         names = [os.path.relpath(p, ROOT) for p in tracked_text_files()]
         for must in ("manifest.json", "README.md", "LICENSE", "CHANGELOG.md", "AGENTS.md", "Service.qml", "BarWidget.qml",

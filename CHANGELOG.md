@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.5
+
+The screenshot the marketplace could not scan.
+
+- `apks-installed.png` is `apks-after.png`: the marketplace's security baseline treats any file whose name contains install, setup or uninstall as a possible installer and fails closed on an image with such a name, which blocks the listing. `tests/test_tree.py` now refuses such a name anywhere in the tree.
+
 ## 1.12.4
 
 The listing's one line.

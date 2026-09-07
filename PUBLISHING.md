@@ -60,6 +60,16 @@ The list itself is on the board, in the submission issue (COS-109), on
 purpose not here. The README says "install the `android-tools` package or
 the SDK platform-tools" and never gives a command line for it; keep it so.
 
+The scanner also probes every binary asset whose file name contains
+`install`, `installer`, `setup` or `uninstall` and fails closed on one it
+cannot read as text (`security-baseline-scope.mjs`; seen 2026-09-08 with
+`apks-installed.png`: "is not a supported text file", no approval possible).
+`test_tree.py` pins that no file in the tree carries such a name. The
+scanner can be run locally against a pushed commit: clone the marketplace
+repo, then `runSecurityBaseline(repoUrl, sha, { requiredPaths })` from
+`scripts/security-baseline.mjs` with `GITHUB_TOKEN` set (`gh auth token`);
+Markets' listed commit is the control that passes.
+
 What a maintainer will read, and what the notes below say up front:
 
 - The QML never runs `adb`. One Python helper (`bin/omarchy-android-dev`,
@@ -112,4 +122,7 @@ What a maintainer will read, and what the notes below say up front:
 ## Submission log
 
 - 2026-09-08: v1.12.4 tagged and released; `next` branched off `main` for
-  the work between releases. The submission issue: see below once filed.
+  the work between releases. Running the baseline scanner locally against
+  that commit failed closed on `apks-installed.png` (the rule above), so
+  v1.12.5 renames the screenshot and is the commit submitted. The
+  submission issue: see below once filed.

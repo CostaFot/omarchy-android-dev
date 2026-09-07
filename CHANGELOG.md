@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.4
+
+The listing's one line.
+
+- The manifest description is the README's opening sentence with the plugin's parts after a colon, instead of the comma list of every feature. It is what the marketplace card shows beside the name.
+
 ## 1.12.3
 
 The hub screenshot catches up with the pages (board issue COS-118).

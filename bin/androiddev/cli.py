@@ -46,8 +46,8 @@ HELP = [
     ("select SERIAL", "remember SERIAL as the selected device"),
     ("track", "stream one JSON line per device change (adb track-devices)"),
     ("packages", "installed packages: Foreground, Running, Debuggable, Other"),
-    ("package PKG", "version, debuggable, launcher activity, runtime permissions"),
-    ("app launch|restart|force-stop|kill|clear|clear-restart|uninstall PKG", "the per-package actions"),
+    ("package PKG", "version, debuggable, the launcher activities (and which one Launch starts), runtime permissions"),
+    ("app launch|restart|force-stop|kill|clear|clear-restart|uninstall PKG [ACTIVITY]", "the per-package actions; launch, restart and clear-restart take the launcher activity to start when the package declares several, and remember it"),
     ("perms grant|revoke PKG", "grant or revoke every runtime permission"),
     ("deeplink URL [PKG]", "am start -a VIEW -d URL, scoped to PKG when given"),
     ("screenshot", "screencap to the pictures dir, clipboard and a notification"),
@@ -60,7 +60,7 @@ HELP = [
     ("text clipboard", "type the clipboard (wl-paste) on the device"),
     ("tools", "scrcpy, emulator and terminal found or not; the AVDs with Running or Stopped"),
     ("tool scrcpy", "mirror the selected device (scrcpy -s SERIAL --window-title, --turn-screen-off --stay-awake with mirrorScreenOff, plus scrcpyArgs)"),
-    ("tool avd NAME", "start that AVD (refused while it runs)"),
+    ("tool avd NAME [cold]", "start that AVD (refused while it runs); `cold` boots it fresh instead of resuming its snapshot (-no-snapshot-load)"),
     ("tool avd-stop SERIAL", "stop a running emulator (adb emu kill)"),
     ("tool logcat [PKG]", "adb logcat in a terminal, following PKG's process when given"),
     ("wireless", "mDNS yes or no, the pairing and connect services on the network, the Wi-Fi and plugged devices, a VPN interface that is up"),
@@ -314,11 +314,18 @@ def cmd_package(ctx, args):
 
 
 def cmd_app(ctx, args):
-    if len(args) != 2 or args[0] not in actions.ACTIONS:
-        raise BadArgs("app " + "|".join(actions.ACTIONS) + " PKG")
-    pkg = _package_arg(args, "app ACTION PKG")
+    usage = "app " + "|".join(actions.ACTIONS) + " PKG [ACTIVITY]"
+    if len(args) not in (2, 3) or args[0] not in actions.ACTIONS:
+        raise BadArgs(usage)
+    launching = args[0] in actions.LAUNCHING
+    if len(args) == 3 and not launching:
+        raise BadArgs(f"app {args[0]} PKG")
+    pkg = _package_arg(args[:2], usage)
     adb, serial = ctx.device()
-    payload = actions.ACTIONS[args[0]](adb, serial, pkg)
+    if launching:
+        payload = actions.ACTIONS[args[0]](adb, serial, pkg, ctx.state, args[2] if len(args) == 3 else None)
+    else:
+        payload = actions.ACTIONS[args[0]](adb, serial, pkg)
     payload["action"] = args[0]
     payload["package"] = pkg
     if args[0] != "uninstall":
@@ -461,7 +468,7 @@ def cmd_tools(ctx, args):
 
 
 def cmd_tool(ctx, args):
-    usage = "tool scrcpy | tool avd NAME | tool avd-stop SERIAL | tool logcat [PKG]"
+    usage = "tool scrcpy | tool avd NAME [cold] | tool avd-stop SERIAL | tool logcat [PKG]"
     if not args:
         raise BadArgs(usage)
     sub = args[0]
@@ -471,15 +478,15 @@ def cmd_tool(ctx, args):
         adb, serial = ctx.device()
         return toolsmod.scrcpy(serial, ctx.settings, _device_label(ctx, serial), adb.path)
     if sub == "avd":
-        if len(args) != 2 or not toolsmod.AVD_RE.match(args[1]):
-            raise BadArgs("tool avd NAME")
+        if len(args) not in (2, 3) or not toolsmod.AVD_RE.match(args[1]) or (len(args) == 3 and args[2] != "cold"):
+            raise BadArgs("tool avd NAME [cold]")
         emulator = toolsmod.emulator_path(ctx.adb.path if ctx.adb else None)
         avds = toolsmod.list_avds(emulator)
         try:
             running = toolsmod.running_avds(ctx.devices())
         except AdbError:
             running = {}
-        return toolsmod.avd_start(emulator, args[1], avds, running)
+        return toolsmod.avd_start(emulator, args[1], avds, running, cold=len(args) == 3)
     if sub == "avd-stop":
         if len(args) != 2 or not devmod.valid_serial(args[1]):
             raise BadArgs("tool avd-stop SERIAL")

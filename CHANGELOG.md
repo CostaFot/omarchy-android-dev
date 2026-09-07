@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.0
+
+Two small choice pages (board issues COS-91 and COS-105).
+
+- Added: a stopped emulator's row on the Tools page now asks how to start it: *Quick boot* (the emulator's default, the saved snapshot) or *Cold boot* (`emulator -avd NAME -no-snapshot-load`, the way out of a snapshot that misbehaves). Enter starts it and goes back to Tools; Escape goes back without starting anything. The helper takes `tool avd NAME cold`, and `omarchy-shell costafot.android-dev avdcold NAME` is the cold boot's verb (`avd NAME` stays the quick one).
+- Added: a package with several launcher activities (a debug build with LeakCanary's Leaks screen in the launcher, an app with several entry points) no longer launches whichever one `resolve-activity` ranks first. The `package PKG` document lists them all (`launcher_activities`, one query scoped to the package; `resolve-activity` stays as the fallback for a shell without it), the actions note names the count, and Launch opens a picker the first time: one row per activity, Enter starts that one and the helper remembers it for the package (`state.json`'s `launch_activities`, fifty kept), so the next Launch, Restart and Clear data and restart go straight to it. A *Launcher activity* row under Launch changes the pick. `app launch|restart|clear-restart PKG ACTIVITY` names one from the terminal; the IPC `launch PKG` follows the pick.
+- Tests: 234.
+
 ## 1.8.0
 
 The window from the bar and the hub (board issue COS-113).

@@ -96,6 +96,62 @@ def parse_top_resumed(text):
     return None
 
 
+# `pkg/Class` or `pkg/.Class`: what `am start -n` takes.
+COMPONENT_RE = re.compile(r"^[A-Za-z0-9_.]+/\.?[A-Za-z0-9_.$]+$")
+LAUNCHER_QUERY = ("cmd", "package", "query-activities", "--brief",
+                  "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER")
+RESOLVE_QUERIES = (("cmd", "package", "resolve-activity", "--brief", "-c", "android.intent.category.LAUNCHER"),
+                   ("pm", "resolve-activity", "--brief", "-c", "android.intent.category.LAUNCHER"))
+
+
+def valid_component(component, pkg):
+    """A component of `pkg`, one field long, in the component alphabet."""
+    c = str(component or "")
+    return len(c) <= fmt.MAX_FIELD and c.startswith(pkg + "/") and COMPONENT_RE.match(c) is not None
+
+
+def parse_launcher_activities(text, pkg):
+    """Every component of `pkg` in a `cmd package query-activities --brief`
+    answer (the line under each `Activity #n:` header), in the order the
+    package manager ranks them, once each."""
+    out = []
+    for line in fmt.lines(text):
+        s = fmt.clean(line.strip())
+        if valid_component(s, pkg) and s not in out:
+            out.append(s)
+    return fmt.cap_list(out, fmt.MAX_LAUNCHER_ACTIVITIES)
+
+
+def launcher_activities(adb, serial, pkg):
+    """The launcher activities of `pkg`: one `query-activities` call scoped
+    to the package with `-p`. When that answers nothing (a shell without
+    the query, say), `resolve-activity` as before, in its two spellings,
+    which gives one at most."""
+    try:
+        found = parse_launcher_activities(adb.shell(serial, *LAUNCHER_QUERY, "-p", pkg, check=False).text, pkg)
+    except AdbError:
+        found = []
+    if found:
+        return found
+    for args in RESOLVE_QUERIES:
+        try:
+            one = parse_resolve_activity(adb.shell(serial, *args, pkg, check=False).text, pkg)
+        except AdbError:
+            one = None
+        if one:
+            return [one]
+    return []
+
+
+def launch_choice(activities, remembered):
+    """What a plain launch starts, and whether it was picked: the remembered
+    pick when the package still declares it, else the first the package
+    manager ranks (what resolve-activity answers), else None."""
+    if remembered and remembered in activities:
+        return remembered, True
+    return (activities[0] if activities else None), False
+
+
 def parse_resolve_activity(text, pkg):
     """The component (`pkg/activity`) from `cmd package resolve-activity
     --brief`: the last line that starts with the package."""
@@ -227,10 +283,8 @@ def package_info(adb, serial, state, pkg):
     info = parse_package_dump(dump.text, pkg)
     if not info["found"]:
         raise AdbError("adb_failed", f"No such package: {pkg}")
-    try:
-        launcher = parse_resolve_activity(adb.shell(serial, "cmd", "package", "resolve-activity", "--brief", "-c", "android.intent.category.LAUNCHER", pkg).text, pkg)
-    except AdbError:
-        launcher = None
+    activities = launcher_activities(adb, serial, pkg)
+    launcher, picked = launch_choice(activities, state.launch_activity(pkg) if state else None)
     try:
         running = pkg in parse_ps(adb.shell(serial, "ps", "-A", cap=fmt.CAP_PACKAGES).text)
     except AdbError:
@@ -247,6 +301,10 @@ def package_info(adb, serial, state, pkg):
         "version_code": info["version_code"],
         "debuggable": info["debuggable"],
         "launcher_activity": launcher,
+        "launcher_activities": [{"component": c, "label": fmt.activity_label(c, pkg), "chosen": c == launcher} for c in activities],
+        "launcher_picked": picked,
+        "launcher_text": fmt.launcher_text(len(activities)),
+        "launcher_detail": fmt.launcher_detail(launcher, len(activities)),
         "runtime_permissions": info["runtime_permissions"],
         "running": running,
         "foreground": foreground,

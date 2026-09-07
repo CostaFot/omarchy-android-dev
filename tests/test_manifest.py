@@ -151,6 +151,20 @@ class ManifestMatchesTheQml(unittest.TestCase):
         self.assertIn("inPopup: true", read("Panel.qml"))
         self.assertNotIn("inPopup", read("Window.qml"))
 
+    def test_cold_boot_and_the_launcher_picker_are_wired(self):
+        # 1.9.0: the boot picker under a stopped AVD row and the launcher
+        # picker under Launch are two pages the IPC `page` verb never opens
+        # (they need an AVD or a package); the cold boot has its own verb.
+        pages = js_literal(self.panel, "ipcPages", "]")
+        for page in ("avdboot", "launchpick"):
+            self.assertIn(f'page: "{page}"', self.panel, page)
+            self.assertNotIn(page, pages)
+        self.assertIn('["tool", "avd", row.avd].concat(row.cold ? ["cold"] : [])', self.panel)
+        self.assertIn('act(["app", "launch", row.pkg, row.component]', self.panel)
+        self.assertIn("function avdcold(name: string): string", self.service)
+        self.assertIn('root.act(["tool", "avd", n, "cold"])', self.service)
+        self.assertRegex(self.service, r'"  avdcold NAME\s')
+
     def test_help_names_every_setting(self):
         for key in SETTING_DEFAULTS:
             self.assertIn(key, self.service, key)

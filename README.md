@@ -40,7 +40,7 @@ It opens on a hub: the selected device with its state, then the pages, and a las
 <img src="assets/screenshots/actions.png" width="300" alt="a package's actions">
 </p>
 
-**Apps** lists the packages on the device, third-party by default (*Show system apps* lists them all), with a filter box. The one in the foreground comes first, then the running ones, then the debuggable ones, then the rest; the package you last opened sits on top when the box is empty. Enter opens a package: its version and launcher activity, then Launch, Restart, Kill process, Clear app data, Clear data and restart, Force stop, Open deep link, Uninstall (asks first), Grant all permissions, Revoke all permissions. Each row names the adb command it runs.
+**Apps** lists the packages on the device, third-party by default (*Show system apps* lists them all), with a filter box. The one in the foreground comes first, then the running ones, then the debuggable ones, then the rest; the package you last opened sits on top when the box is empty. Enter opens a package: its version and launcher activity, then Launch, Restart, Kill process, Clear app data, Clear data and restart, Force stop, Open deep link, Uninstall (asks first), Grant all permissions, Revoke all permissions. Each row names the adb command it runs. A package with more than one launcher activity (a debug build with LeakCanary's Leaks screen, say) gets a picker the first time you press Launch: Enter starts the one under the cursor and Launch, Restart and Clear data and restart keep starting it from then on; the *Launcher activity* row under Launch changes the pick.
 
 <img src="assets/screenshots/deeplink.png" width="300" alt="the deep link page with the typed URL and the recent links">
 
@@ -70,7 +70,7 @@ It opens on a hub: the selected device with its state, then the pages, and a las
 
 <img src="assets/screenshots/tools.png" width="300" alt="the tools page: scrcpy, logcat and the emulators">
 
-**Tools** has *Mirror with scrcpy* (once scrcpy is installed; with *Mirror with the screen off* on, the phone's own screen goes dark and stays awake while the mirror runs, and the *Extra scrcpy arguments* setting is appended; the row says whether it mirrors over USB or over Wi-Fi), *Logcat* for the package you last opened (`adb logcat --pid=…` in your default terminal; the app has to be running), and one row per emulator AVD showing Running or Stopped: Enter starts a stopped one and, after a confirm, stops a running one. What this page launches is yours to close; the plugin never kills it.
+**Tools** has *Mirror with scrcpy* (once scrcpy is installed; with *Mirror with the screen off* on, the phone's own screen goes dark and stays awake while the mirror runs, and the *Extra scrcpy arguments* setting is appended; the row says whether it mirrors over USB or over Wi-Fi), *Logcat* for the package you last opened (`adb logcat --pid=…` in your default terminal; the app has to be running), and one row per emulator AVD showing Running or Stopped: Enter on a stopped one asks for a *Quick boot* (the saved snapshot, the emulator's default) or a *Cold boot* (`-no-snapshot-load`, the way out of a snapshot that misbehaves) and starts it; Enter on a running one stops it after a confirm. What this page launches is yours to close; the plugin never kills it.
 
 <p>
 <img src="assets/screenshots/wireless.png" width="300" alt="the wireless page: the two ways to pair, the Wi-Fi devices, the phones seen on the network">
@@ -131,7 +131,7 @@ omarchy-shell costafot.android-dev flip touches  # animations, touches, pointer,
 omarchy-shell costafot.android-dev record start  # stop pulls the mp4 into ~/Videos; toggle does either
 omarchy-shell costafot.android-dev text "hello world"          # typed into the focused field; clipboard sends the clipboard
 omarchy-shell costafot.android-dev scrcpy                      # mirror the selected device
-omarchy-shell costafot.android-dev avd Medium_Phone            # start that emulator
+omarchy-shell costafot.android-dev avd Medium_Phone            # start that emulator; avdcold NAME boots it fresh (-no-snapshot-load)
 omarchy-shell costafot.android-dev logcat com.android.chrome   # adb logcat --pid in a terminal; no package follows everything
 omarchy-shell costafot.android-dev pair start                  # a pairing QR code in the panel; stop cancels it
 omarchy-shell costafot.android-dev disconnect ADDR             # drops a Wi-Fi entry (its ip:port, or the name adb gave a paired phone)
@@ -187,7 +187,7 @@ Every command answers with one line of JSON. Errors ride inside it; the exit cod
 bin/omarchy-android-dev status | jq '{adb, selected, tools}'
 bin/omarchy-android-dev devices | jq '.devices[] | [.serial, .state, .label]'
 bin/omarchy-android-dev packages | jq '.packages[] | [.name, .section, .detail]'
-bin/omarchy-android-dev package com.android.chrome | jq '{launcher_activity, runtime_permissions}'
+bin/omarchy-android-dev package com.android.chrome | jq '{launcher_activity, launcher_activities, runtime_permissions}'   # app launch PKG ACTIVITY starts one of them and remembers it
 bin/omarchy-android-dev app launch com.android.chrome | jq .notice       # restart, force-stop, kill, clear, clear-restart, uninstall
 bin/omarchy-android-dev perms grant com.android.chrome | jq .notice      # or revoke
 bin/omarchy-android-dev deeplink https://example.com | jq .notice
@@ -198,7 +198,7 @@ bin/omarchy-android-dev record                                          # record
 bin/omarchy-android-dev select emulator-5554 | jq .notice               # with more than one device attached; --serial S does it per call
 bin/omarchy-android-dev apk list ~/Downloads | jq '.apks[].name'        # apk install PATH... installs them in turn
 bin/omarchy-android-dev text send "hello world" | jq .notice            # text clipboard sends the clipboard
-bin/omarchy-android-dev tools | jq '.avds[] | [.name, .detail]'         # tool scrcpy, tool avd NAME, tool avd-stop SERIAL, tool logcat [PKG]
+bin/omarchy-android-dev tools | jq '.avds[] | [.name, .detail]'         # tool scrcpy, tool avd NAME [cold], tool avd-stop SERIAL, tool logcat [PKG]
 bin/omarchy-android-dev wireless | jq '{mdns, services}'                # the pairing and connect services on the network
 bin/omarchy-android-dev pair qr                                         # prints the PNG's path, waits for the phone to scan it; Ctrl-C cancels
 printf '123456\n' | bin/omarchy-android-dev pair code 192.168.1.5:37123 # the code on stdin, never on the command line

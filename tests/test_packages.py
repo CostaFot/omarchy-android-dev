@@ -61,6 +61,35 @@ class Parsing(unittest.TestCase):
         self.assertEqual(pkgmod.parse_resolve_activity(fixture("resolve_activity.txt"), "com.android.chrome"), "com.android.chrome/com.google.android.apps.chrome.Main")
         self.assertIsNone(pkgmod.parse_resolve_activity("No activity found\n", "com.android.chrome"))
 
+    def test_launcher_activities_are_every_component_of_the_package(self):
+        text = fixture("query_activities.txt")
+        self.assertEqual(pkgmod.parse_launcher_activities(text, TEMPLATE), [
+            TEMPLATE + "/com.costafotiadis.androidtemplate.ui.activity.MainActivity",
+            TEMPLATE + "/leakcanary.internal.activity.LeakLauncherActivity",
+        ])
+        self.assertEqual(pkgmod.parse_launcher_activities(text + text, TEMPLATE)[1:], [TEMPLATE + "/leakcanary.internal.activity.LeakLauncherActivity"])  # once each
+        self.assertEqual(pkgmod.parse_launcher_activities(text, "com.android.chrome"), [])  # another package's lines are not ours
+        self.assertEqual(pkgmod.parse_launcher_activities("No activities found\n", TEMPLATE), [])
+        self.assertEqual(pkgmod.parse_launcher_activities("com.a.b/.Main\ncom.a.b/../x\ncom.a.b/.Main;rm\n", "com.a.b"), ["com.a.b/.Main"])
+        self.assertTrue(pkgmod.valid_component("com.a.b/.Main", "com.a.b"))
+        self.assertTrue(pkgmod.valid_component("com.a.b/com.a.b.ui.Main$Inner", "com.a.b"))
+        self.assertFalse(pkgmod.valid_component("com.a.b/", "com.a.b"))
+        self.assertFalse(pkgmod.valid_component("com.a.bc/.Main", "com.a.b"))
+        self.assertFalse(pkgmod.valid_component("com.a.b/.Main x", "com.a.b"))
+        self.assertEqual(fmt.activity_label(TEMPLATE + "/com.costafotiadis.androidtemplate.ui.activity.MainActivity", TEMPLATE), "com.costafotiadis.androidtemplate.ui.activity.MainActivity")
+        self.assertEqual(fmt.activity_label("com.a.b/com.a.b.ui.Main", "com.a.b"), ".ui.Main")
+        self.assertEqual(fmt.activity_label("com.a.b/.Main", "com.a.b"), ".Main")
+        self.assertEqual(fmt.launcher_text(0), "No launcher activity")
+        self.assertEqual(fmt.launcher_text(1), "1 launcher activity")
+        self.assertEqual(fmt.launcher_text(2), "2 launcher activities")
+
+    def test_launch_choice_is_the_pick_while_the_package_still_has_it(self):
+        two = ["com.a.b/.Main", "com.a.b/.Leaks"]
+        self.assertEqual(pkgmod.launch_choice(two, None), ("com.a.b/.Main", False))
+        self.assertEqual(pkgmod.launch_choice(two, "com.a.b/.Leaks"), ("com.a.b/.Leaks", True))
+        self.assertEqual(pkgmod.launch_choice(two, "com.a.b/.Gone"), ("com.a.b/.Main", False))
+        self.assertEqual(pkgmod.launch_choice([], "com.a.b/.Gone"), (None, False))
+
     def test_package_dump(self):
         info = pkgmod.parse_package_dump(fixture("dumpsys_package_pkg.txt"), "com.android.chrome")
         self.assertTrue(info["found"])
@@ -161,6 +190,56 @@ class Listing(FakeAdbCase):
         pkgmod.list_packages(Adb(FAKE_ADB, "override", None), SERIAL, State(), Settings({"showSystemApps": True}))
         self.assertIn(f"-s {SERIAL} shell pm list packages", self.joined_calls())
         self.assertNotIn(f"-s {SERIAL} shell pm list packages -3", self.joined_calls())
+
+    def test_package_info_lists_the_launcher_activities_and_the_pick(self):
+        """One query-activities call scoped to the package gives the list;
+        `launcher_activity` is what Launch starts: the remembered pick when
+        the package still declares it, else the first."""
+        self.add_rules({"match": "query-activities", "stdout_file": "query_activities.txt"},
+                       {"match": "shell dumpsys package " + TEMPLATE, "stdout": "Packages:\n  Package [" + TEMPLATE + "] (1):\n    versionName=0.0.1\n    flags=[ DEBUGGABLE HAS_CODE ]\n"})
+        adb = Adb(FAKE_ADB, "override", None)
+        state = State()
+        main = TEMPLATE + "/com.costafotiadis.androidtemplate.ui.activity.MainActivity"
+        leaks = TEMPLATE + "/leakcanary.internal.activity.LeakLauncherActivity"
+        info = pkgmod.package_info(adb, SERIAL, state, TEMPLATE)
+        self.assertEqual(info["launcher_activity"], main)
+        self.assertFalse(info["launcher_picked"])
+        self.assertEqual(info["launcher_text"], "2 launcher activities")
+        self.assertEqual(info["launcher_detail"], main + " · 2 launcher activities")
+        self.assertEqual(info["launcher_activities"], [
+            {"component": main, "label": "com.costafotiadis.androidtemplate.ui.activity.MainActivity", "chosen": True},
+            {"component": leaks, "label": "leakcanary.internal.activity.LeakLauncherActivity", "chosen": False},
+        ])
+        query = [c for c in self.calls() if "query-activities" in c]
+        self.assertEqual(query, [["-s", SERIAL, "shell", "cmd", "package", "query-activities", "--brief", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", "-p", TEMPLATE]])
+        self.assertFalse(any("resolve-activity" in c for c in self.joined_calls()))  # the query answered
+        state.set_launch_activity(TEMPLATE, leaks)
+        info = pkgmod.package_info(adb, SERIAL, state, TEMPLATE)
+        self.assertEqual(info["launcher_activity"], leaks)
+        self.assertTrue(info["launcher_picked"])
+        self.assertEqual([a["chosen"] for a in info["launcher_activities"]], [False, True])
+        state.set_launch_activity(TEMPLATE, TEMPLATE + "/.Gone")
+        info = pkgmod.package_info(adb, SERIAL, state, TEMPLATE)
+        self.assertEqual((info["launcher_activity"], info["launcher_picked"]), (main, False))
+
+    def test_launcher_activities_fall_back_to_resolve_activity(self):
+        """A shell whose query answers nothing gets the old resolve-activity
+        read, in its two spellings; one activity at most, never picked."""
+        self.add_rules({"match": "query-activities", "stdout": "No activities found\n"},
+                       {"match": "shell dumpsys package com.android.chrome", "stdout_file": "dumpsys_package_pkg.txt"})
+        adb = Adb(FAKE_ADB, "override", None)
+        info = pkgmod.package_info(adb, SERIAL, State(), "com.android.chrome")
+        self.assertEqual(info["launcher_activity"], "com.android.chrome/com.google.android.apps.chrome.Main")
+        self.assertEqual(info["launcher_text"], "1 launcher activity")
+        self.assertEqual(info["launcher_detail"], info["launcher_activity"])
+        self.assertEqual(len(info["launcher_activities"]), 1)
+        self.assertIn(f"-s {SERIAL} shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER com.android.chrome", self.joined_calls())
+        self.add_rules({"match": "resolve-activity", "stdout": "No activity found\n"})
+        info = pkgmod.package_info(adb, SERIAL, State(), "com.android.chrome")
+        self.assertIsNone(info["launcher_activity"])
+        self.assertEqual(info["launcher_text"], "No launcher activity")
+        self.assertEqual(info["launcher_detail"], "No launcher activity")
+        self.assertIn(f"-s {SERIAL} shell pm resolve-activity --brief -c android.intent.category.LAUNCHER com.android.chrome", self.joined_calls())
 
     def test_package_info_fills_debuggable_into_the_next_list(self):
         adb = Adb(FAKE_ADB, "override", None)

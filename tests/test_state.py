@@ -23,6 +23,21 @@ class Files(FakeAdbCase):
         self.assertEqual(State().selected, "emulator-5554")
         self.assertEqual([f for f in os.listdir(self.state_dir) if f.startswith(".tmp-")], [])
 
+    def test_launch_picks_are_kept_newest_last_under_the_cap(self):
+        s = State()
+        for i in range(60):
+            s.set_launch_activity(f"com.pkg{i}", f"com.pkg{i}/.Main")
+        s.set_launch_activity("com.pkg20", "com.pkg20/.Leaks")  # a re-pick moves to the end
+        s.save()
+        again = State()
+        self.assertIsNone(again.launch_activity("com.pkg5"))  # past the cap of 50
+        self.assertEqual(again.launch_activity("com.pkg59"), "com.pkg59/.Main")
+        self.assertEqual(again.launch_activity("com.pkg20"), "com.pkg20/.Leaks")
+        with open(os.path.join(self.state_dir, "state.json"), encoding="utf-8") as f:
+            picks = json.load(f)["launch_activities"]
+        self.assertEqual(len(picks), 50)
+        self.assertEqual(list(picks)[-1], "com.pkg20")
+
     def test_group_bits_on_the_dir_are_removed(self):
         os.makedirs(self.state_dir)
         os.chmod(self.state_dir, 0o755)

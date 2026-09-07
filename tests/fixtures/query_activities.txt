@@ -1,0 +1,7 @@
+2 activities found:
+  Activity #0:
+    priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false
+    com.costafotiadis.androidtemplate.compose.debug/com.costafotiadis.androidtemplate.ui.activity.MainActivity
+  Activity #1:
+    priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false
+    com.costafotiadis.androidtemplate.compose.debug/leakcanary.internal.activity.LeakLauncherActivity

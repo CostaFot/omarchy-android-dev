@@ -212,7 +212,13 @@ def scrcpy(serial, settings, label=None, adb_path=None):
     return {"notice": f"scrcpy started: {label or serial}", "argv": argv[1:]}
 
 
-def avd_start(emulator, name, avds, running):
+# A cold boot: the emulator starts the system fresh instead of resuming
+# the AVD's saved snapshot (quickboot, its default), the way out of a
+# snapshot that misbehaves. The snapshot is saved again on exit as usual.
+COLD_BOOT_ARGS = ["-no-snapshot-load"]
+
+
+def avd_start(emulator, name, avds, running, cold=False):
     if not emulator:
         raise AdbError("no_tool", "No emulator found next to adb, in ~/Android/Sdk or on PATH")
     if not AVD_RE.match(name or ""):
@@ -221,8 +227,9 @@ def avd_start(emulator, name, avds, running):
         raise AdbError("bad_args", f"No AVD named {name}")
     if name in running:
         raise AdbError("bad_args", f"{name} is already running ({running[name]})")
-    launch([emulator, "-avd", name], "emulator")
-    return {"notice": f"Starting {name}", "avd": name}
+    argv = [emulator, "-avd", name] + (list(COLD_BOOT_ARGS) if cold else [])
+    launch(argv, "emulator")
+    return {"notice": f"Starting {name} (cold boot)" if cold else f"Starting {name}", "avd": name, "cold": bool(cold), "argv": argv[1:]}
 
 
 def avd_stop(adb, serial, label=None):

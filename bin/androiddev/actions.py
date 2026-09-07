@@ -5,7 +5,7 @@ import re
 
 from . import fmt
 from .adb import AdbError
-from .packages import parse_package_dump, parse_resolve_activity
+from .packages import launch_choice, launcher_activities, parse_package_dump, valid_component
 
 URL_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:[^\s\x00-\x1f\x7f]+$")
 
@@ -14,34 +14,41 @@ def valid_url(url):
     return bool(url) and len(url) <= 2048 and URL_RE.match(url) is not None
 
 
-def resolve_activity(adb, serial, pkg):
-    """The launcher component, or None. `cmd package resolve-activity` as on
-    Windows; when that answers nothing, `pm resolve-activity` as a second
-    spelling some builds prefer."""
-    for args in (("cmd", "package", "resolve-activity", "--brief", "-c", "android.intent.category.LAUNCHER", pkg),
-                 ("pm", "resolve-activity", "--brief", "-c", "android.intent.category.LAUNCHER", pkg)):
-        try:
-            found = parse_resolve_activity(adb.shell(serial, *args, check=False).text, pkg)
-        except AdbError:
-            found = None
-        if found:
-            return found
-    return None
+def resolve_activity(adb, serial, pkg, state=None, activity=None):
+    """The launcher component a launch starts, or None: the one named (a
+    component of the package, as the picker sends it), else the pick
+    remembered for the package while it still declares it, else the first
+    of its launcher activities (`packages.launcher_activities`: one
+    query-activities call, resolve-activity behind it)."""
+    if activity:
+        if not valid_component(activity, pkg):
+            raise AdbError("bad_args", f"The activity has to be a component of {pkg}, as {pkg}/.Main")
+        return activity
+    chosen, _ = launch_choice(launcher_activities(adb, serial, pkg), state.launch_activity(pkg) if state else None)
+    return chosen
 
 
 def _start(adb, serial, activity):
     adb.shell(serial, "am", "start", "-n", activity)
 
 
-def launch(adb, serial, pkg):
-    activity = resolve_activity(adb, serial, pkg)
-    if not activity:
+def _remember(state, pkg, activity):
+    """A named activity is the pick for the package once it has started;
+    a component that failed to start is not remembered."""
+    if state and activity:
+        state.set_launch_activity(pkg, activity)
+
+
+def launch(adb, serial, pkg, state=None, activity=None):
+    target = resolve_activity(adb, serial, pkg, state, activity)
+    if not target:
         raise AdbError("adb_failed", f"Could not resolve launcher activity for {pkg}")
     try:
-        _start(adb, serial, activity)
+        _start(adb, serial, target)
     except AdbError as e:
         raise AdbError(e.code, f"Failed to launch: {e.message}", e.stderr) from e
-    return {"notice": f"Launched {pkg}", "activity": activity}
+    _remember(state, pkg, activity)
+    return {"notice": f"Launched {pkg}", "activity": target}
 
 
 def force_stop(adb, serial, pkg):
@@ -60,19 +67,20 @@ def kill(adb, serial, pkg):
     return {"notice": f"Killed process: {pkg}"}
 
 
-def restart(adb, serial, pkg):
+def restart(adb, serial, pkg, state=None, activity=None):
     try:
         adb.shell(serial, "am", "force-stop", pkg)
     except AdbError as e:
         raise AdbError(e.code, f"Failed to stop app: {e.message}", e.stderr) from e
-    activity = resolve_activity(adb, serial, pkg)
-    if not activity:
+    target = resolve_activity(adb, serial, pkg, state, activity)
+    if not target:
         raise AdbError("adb_failed", f"App stopped, but could not resolve launcher activity for {pkg}")
     try:
-        _start(adb, serial, activity)
+        _start(adb, serial, target)
     except AdbError as e:
         raise AdbError(e.code, f"App stopped, but failed to launch: {e.message}", e.stderr) from e
-    return {"notice": f"Restarted {pkg}", "activity": activity}
+    _remember(state, pkg, activity)
+    return {"notice": f"Restarted {pkg}", "activity": target}
 
 
 def clear(adb, serial, pkg):
@@ -83,19 +91,20 @@ def clear(adb, serial, pkg):
     return {"notice": f"Cleared data for {pkg}"}
 
 
-def clear_restart(adb, serial, pkg):
+def clear_restart(adb, serial, pkg, state=None, activity=None):
     try:
         adb.shell(serial, "pm", "clear", pkg)
     except AdbError as e:
         raise AdbError(e.code, f"Failed to clear data: {e.message}", e.stderr) from e
-    activity = resolve_activity(adb, serial, pkg)
-    if not activity:
+    target = resolve_activity(adb, serial, pkg, state, activity)
+    if not target:
         raise AdbError("adb_failed", f"Data cleared, but could not resolve launcher activity for {pkg}")
     try:
-        _start(adb, serial, activity)
+        _start(adb, serial, target)
     except AdbError as e:
         raise AdbError(e.code, f"Data cleared, but failed to launch: {e.message}", e.stderr) from e
-    return {"notice": f"Cleared data and restarted {pkg}", "activity": activity}
+    _remember(state, pkg, activity)
+    return {"notice": f"Cleared data and restarted {pkg}", "activity": target}
 
 
 def uninstall(adb, serial, pkg):
@@ -163,6 +172,10 @@ def deeplink(adb, serial, url, pkg=None):
         raise AdbError(e.code, f"Failed to {verb} deep link: {e.message}", e.stderr) from e
     return {"notice": (f"Opened: {url}" if pkg else f"Launched: {url}"), "url": url, "package": pkg}
 
+
+# The actions that start the package: they take the state (the remembered
+# pick) and an optional activity; the others take neither.
+LAUNCHING = ("launch", "restart", "clear-restart")
 
 ACTIONS = {
     "launch": launch,

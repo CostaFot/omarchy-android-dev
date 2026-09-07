@@ -96,6 +96,27 @@ class Launches(FakeAdbCase):
         self.assertEqual(doc["notice"], "Starting Medium_Phone")
         self.assertIn(["-avd", "Medium_Phone"], self.tool_calls("emulator", wait=2))
 
+    def test_cold_boot_adds_no_snapshot_load(self):
+        """`tool avd NAME cold` boots the AVD fresh: the emulator argv carries
+        -no-snapshot-load; the quick boot's does not; any other word is
+        refused before the emulator is asked anything."""
+        self.fake_tool("emulator", [("-list-avds", fixture("list_avds.txt"), 0, 0), ("-avd", "", 0, 3)], "OMARCHY_ANDROID_DEV_EMULATOR")
+        doc = self.run_cli("tool", "avd", "Medium_Phone", "cold")
+        self.assertTrue(doc["ok"], doc)
+        self.assertEqual(doc["notice"], "Starting Medium_Phone (cold boot)")
+        self.assertTrue(doc["cold"])
+        self.assertEqual(doc["argv"], ["-avd", "Medium_Phone", "-no-snapshot-load"])
+        self.assertIn(["-avd", "Medium_Phone", "-no-snapshot-load"], self.tool_calls("emulator", wait=2))
+        doc = self.run_cli("tool", "avd", "Medium_Phone")
+        self.assertFalse(doc["cold"])
+        self.assertEqual(doc["argv"], ["-avd", "Medium_Phone"])
+        before = len(self.tool_calls("emulator", wait=2))
+        doc = self.run_cli("tool", "avd", "Medium_Phone", "warm")
+        self.assertEqual(doc["error"]["code"], "bad_args")
+        self.assertEqual(doc["error"]["message"], "tool avd NAME [cold]")
+        self.assertEqual(len(self.tool_calls("emulator")), before)
+        self.assertEqual(self.run_cli("tool", "avd", "Pixel_10_Pro_Fold", "cold")["error"]["message"], "Pixel_10_Pro_Fold is already running (emulator-5554)")
+
     def test_avd_start_works_without_adb(self):
         self.fake_tool("emulator", [("-list-avds", fixture("list_avds.txt"), 0, 0)], "OMARCHY_ANDROID_DEV_EMULATOR")
         doc = self.run_cli("tool", "avd", "Medium_Phone", env={"OMARCHY_ANDROID_DEV_PATH": "/nonexistent"})

@@ -162,7 +162,7 @@ class State:
     def _load(self):
         if self._doc is not None:
             return self._doc
-        self._doc = {"selected": None, "last_package": {}, "recent_deeplinks": [], "recent_apk_dirs": []}
+        self._doc = {"selected": None, "last_package": {}, "recent_deeplinks": [], "recent_apk_dirs": [], "launch_activities": {}}
         if not self.dir:
             return self._doc
         data, problem = read_json(self._path("state.json"), default={})
@@ -177,6 +177,9 @@ class State:
                 self._doc["recent_deeplinks"] = [fmt.clean(u, 2048) for u in data["recent_deeplinks"] if isinstance(u, str)][:fmt.MAX_RECENT_DEEPLINKS]
             if isinstance(data.get("recent_apk_dirs"), list):
                 self._doc["recent_apk_dirs"] = [fmt.clean(d) for d in data["recent_apk_dirs"] if isinstance(d, str) and d][:fmt.MAX_RECENT_APK_DIRS]
+            if isinstance(data.get("launch_activities"), dict):
+                picks = [(fmt.clean(k), fmt.clean(v)) for k, v in data["launch_activities"].items() if isinstance(v, str) and v]
+                self._doc["launch_activities"] = dict(picks[-fmt.MAX_LAUNCH_PICKS:])
         return self._doc
 
     def reload(self):
@@ -203,6 +206,22 @@ class State:
         if doc["last_package"].get(serial) != pkg:
             doc["last_package"][serial] = pkg
             self._dirty = True
+
+    def launch_activity(self, pkg):
+        """The launcher activity picked for `pkg`, or None."""
+        return self._load()["launch_activities"].get(pkg)
+
+    def set_launch_activity(self, pkg, component):
+        """Remember the pick, newest last; the oldest goes past the cap."""
+        doc = self._load()
+        picks = doc["launch_activities"]
+        if picks.get(pkg) == component and next(reversed(picks), None) == pkg:
+            return
+        picks.pop(pkg, None)
+        picks[pkg] = component
+        while len(picks) > fmt.MAX_LAUNCH_PICKS:
+            picks.pop(next(iter(picks)))
+        self._dirty = True
 
     @property
     def recent_deeplinks(self):

@@ -19,6 +19,8 @@ MAX_APKS = 200
 MAX_RECENT_DEEPLINKS = 10
 MAX_RECENT_APK_DIRS = 10
 MAX_MDNS_SERVICES = 32
+MAX_LAUNCHER_ACTIVITIES = 32
+MAX_LAUNCH_PICKS = 50
 
 CAP_DEFAULT = 256 * 1024          # adb stdout, most commands
 CAP_QR_PNG = 1024 * 1024          # qrencode's PNG on stdout
@@ -79,6 +81,34 @@ def package_tags(running, foreground, debuggable):
     if debuggable:
         tags.append("debuggable")
     return " · ".join(tags)
+
+
+def activity_label(component, pkg):
+    """A launcher activity as the picker shows it: the class after the
+    slash, with the package prefix taken off (`com.a.b/com.a.b.ui.Main`
+    is `.ui.Main`; `com.a.b/.Main` stays; a class from another package,
+    LeakCanary's `leakcanary.internal.activity.LeakLauncherActivity`
+    say, is shown whole)."""
+    cls = str(component or "").partition("/")[2]
+    if pkg and cls.startswith(pkg + "."):
+        cls = cls[len(pkg):]
+    return clean(cls)
+
+
+def launcher_text(count):
+    """The actions note's count: `1 launcher activity`, `2 launcher
+    activities`, `No launcher activity`."""
+    if count == 0:
+        return "No launcher activity"
+    return f"{count} launcher activit" + ("y" if count == 1 else "ies")
+
+
+def launcher_detail(launcher, count):
+    """The actions note's second line: the activity Launch starts, with
+    the count after it when the package declares several."""
+    if not launcher:
+        return launcher_text(0)
+    return launcher if count <= 1 else f"{launcher} · {launcher_text(count)}"
 
 
 def humanize_model(model):

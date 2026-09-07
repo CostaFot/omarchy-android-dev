@@ -622,7 +622,7 @@ Item {
     "  status               one JSON line: adb, settings, devices, tracker, recording, pairing, the open page, the window, errors",
     "  devices              one JSON line: the attached devices",
     "  select SERIAL        make SERIAL the selected device",
-    "  launch PKG           start PKG's launcher activity on the selected device",
+    "  launch PKG           start PKG's launcher activity on the selected device (the one picked on its page when it has several)",
     "  forcestop PKG        am force-stop PKG",
     "  clear PKG            pm clear PKG",
     "  deeplink URL         am start -a VIEW -d URL",
@@ -633,6 +633,7 @@ Item {
     "  clipboard            type the clipboard (wl-paste) on the selected device",
     "  scrcpy               mirror the selected device with scrcpy",
     "  avd NAME             start that emulator (refused while it runs)",
+    "  avdcold NAME         the same with a cold boot: -no-snapshot-load, the saved snapshot is not resumed",
     "  logcat [PKG]         adb logcat in a terminal, following PKG's process when given",
     "  pair start|stop|toggle  a pairing QR code in the panel; the phone scans it from Wireless debugging",
     "  disconnect ADDR      adb disconnect host[:port], or the mDNS name of a phone adb connected to on its own",
@@ -709,6 +710,10 @@ Item {
     function avd(name: string): string {
       var n = root.validAvd(name)
       return n === "" ? "avd needs an AVD name" : root.act(["tool", "avd", n])
+    }
+    function avdcold(name: string): string {
+      var n = root.validAvd(name)
+      return n === "" ? "avdcold needs an AVD name" : root.act(["tool", "avd", n, "cold"])
     }
     function logcat(pkg: string): string {
       var p = String(pkg || "").trim()

@@ -83,7 +83,7 @@ FocusScope {
   readonly property var pageTitles: ({
     hub: "Android Dev", devices: "Devices", packages: "Apps", actions: "", deeplink: "Deep link", toggles: "Toggles",
     capture: "Capture", apks: "APKs", text: "Send text", tools: "Tools", wireless: "Wireless",
-    paircode: "Pair with a code", settings: "Settings"
+    paircode: "Pair with a code", settings: "Settings", avdboot: "", launchpick: ""
   })
   // Pages the IPC `page` verb may open straight onto.
   readonly property var ipcPages: ["hub", "devices", "packages", "deeplink", "toggles", "capture", "apks", "text", "tools", "wireless", "settings"]
@@ -165,7 +165,10 @@ FocusScope {
 
   readonly property var rows: {
     var out = []
-    if (!isHub) out.push({ type: "title", label: page === "actions" ? (current.pkg || "") : (pageTitles[page] || page) })
+    // Two pages are titled by what they act on: the actions page and the
+    // launcher picker by the package, the boot picker by the AVD.
+    if (!isHub) out.push({ type: "title", label: page === "actions" || page === "launchpick" ? (current.pkg || "")
+                                                    : page === "avdboot" ? (current.avd || "") : (pageTitles[page] || page) })
     var body
     if (page === "hub") body = hubRows()
     else if (page === "devices") body = deviceRows()
@@ -179,6 +182,8 @@ FocusScope {
     else if (page === "tools") body = toolRows()
     else if (page === "wireless") body = wirelessRows()
     else if (page === "paircode") body = paircodeRows()
+    else if (page === "avdboot") body = avdBootRows()
+    else if (page === "launchpick") body = launchPickRows()
     else body = []  // the settings form paints itself
     for (var i = 0; i < body.length; i++) out.push(body[i])
     var s = root.store
@@ -390,7 +395,7 @@ FocusScope {
       else if (info.running) tags.push("running")
       if (info.debuggable) tags.push("debuggable")
       out.push({ type: "note", label: info.version_name ? "Version " + info.version_name + (tags.length ? " · " + tags.join(" · ") : "") : tags.join(" · "),
-                 detail: info.launcher_activity || "No launcher activity" })
+                 detail: info.launcher_detail || info.launcher_activity || "No launcher activity" })
     } else if (s.busy && s.runningCommand === "package") {
       out.push({ type: "note", label: "Reading the package…" })
     }
@@ -398,8 +403,53 @@ FocusScope {
     for (var i = 0; i < appActions.length; i++) {
       var a = appActions[i]
       out.push({ type: "action", icon: a.icon, label: a.label, detail: a.detail, action: "app", act: a.act, pkg: pkg })
+      // A package with several launcher activities (a debug build with
+      // LeakCanary's Leaks screen, say) gets the picker under Launch.
+      if (a.act === "launch" && hasSeveralLaunchers(info))
+        out.push({ type: "action", icon: "\uf0cb", label: "Launcher activity",
+                   detail: info.launcher_picked ? "Launch starts your pick · Enter changes it" : "Launch starts the first · Enter picks another",
+                   action: "app", act: "pick", pkg: pkg })
     }
     return out
+  }
+
+  function hasSeveralLaunchers(info) {
+    return !!info && Array.isArray(info.launcher_activities) && info.launcher_activities.length > 1
+  }
+
+  // ---- Launcher picker ----------------------------------------------------
+  // One row per launcher activity of the package (the helper's list, its
+  // labels and which one Launch starts); Enter starts that one and the
+  // helper remembers it for the package, so Launch goes straight to it
+  // from then on.
+  function launchPickRows() {
+    var pkg = current.pkg || ""
+    var info = root.store.packageDetails[pkg]
+    var out = []
+    if (!hasSeveralLaunchers(info)) {
+      out.push({ type: "note", label: "One launcher activity", detail: "Launch starts it; nothing to pick here." })
+      return out
+    }
+    out.push({ type: "note", label: info.launcher_text || "", detail: "Enter starts one and makes it what Launch starts" })
+    for (var i = 0; i < info.launcher_activities.length; i++) {
+      var a = info.launcher_activities[i]
+      out.push({ type: "action", icon: a.chosen ? "\uf00c" : "\uf04b", label: a.label || a.component,
+                 detail: a.chosen ? "am start -n · what Launch starts now" : "am start -n · Enter starts it and Launch keeps it",
+                 action: "launchact", pkg: pkg, component: a.component })
+    }
+    return out
+  }
+
+  // ---- Boot picker ----------------------------------------------------------
+  // A stopped AVD: quick boot (the emulator's default, the saved snapshot)
+  // or a cold boot (-no-snapshot-load, the way out of a snapshot that
+  // misbehaves). Enter starts it and goes back to Tools, which re-reads.
+  function avdBootRows() {
+    var name = current.avd || ""
+    return [
+      { type: "action", icon: "\uf04b", label: "Quick boot", detail: "emulator -avd <name> · resumes the saved snapshot", action: "avdstart", avd: name, cold: false },
+      { type: "action", icon: "\uf2dc", label: "Cold boot", detail: "emulator -avd <name> -no-snapshot-load · starts fresh", action: "avdstart", avd: name, cold: true }
+    ]
   }
 
   function deeplinkRows() {
@@ -680,8 +730,8 @@ FocusScope {
       for (var i = 0; i < t.avds.length; i++) {
         var a = t.avds[i]
         out.push({ type: "action", icon: a.running ? "\uf04d" : "\uf04b", label: a.name,
-                   detail: (a.detail || "") + (a.running ? " · Enter stops it" : " · Enter starts it"),
-                   action: a.running ? "avdstop" : "avd", avd: a.name, serial: a.serial || "" })
+                   detail: (a.detail || "") + (a.running ? " · Enter stops it" : " · Enter starts it, quick or cold"),
+                   action: a.running ? "avdstop" : "avdboot", avd: a.name, serial: a.serial || "" })
       }
     }
     return out
@@ -815,6 +865,7 @@ FocusScope {
     if (page === "tools") return "j/k move · Enter runs it · r reads again · Esc back"
     if (page === "wireless") return "j/k move · Enter runs it · r looks again · Esc back"
     if (page === "paircode") return "Enter takes the address, then the code · r looks again · Esc back"
+    if (page === "avdboot" || page === "launchpick") return "j/k move · Enter starts it · Esc back"
     if (page === "settings") return "j/k or Tab move · Enter edits or flips · Enter on Save · Esc cancels"
     return "Esc or Backspace back"
   }
@@ -1131,7 +1182,22 @@ FocusScope {
     else if (row.action === "clipboard") act(["text", "clipboard"])
     else if (row.action === "scrcpy") act(["tool", "scrcpy"])
     else if (row.action === "logcat") act(["tool", "logcat"].concat(row.pkg ? [row.pkg] : []))
-    else if (row.action === "avd") act(["tool", "avd", row.avd], function() { if (root.page === "tools") root.store.refreshTools() })
+    else if (row.action === "avdboot") push({ page: "avdboot", avd: row.avd })
+    else if (row.action === "avdstart") {
+      // Back to Tools first (it re-reads on entry), then the launch; the
+      // answer re-reads once more so the row follows the emulator.
+      pop()
+      act(["tool", "avd", row.avd].concat(row.cold ? ["cold"] : []), function() { if (root.page === "tools") root.store.refreshTools() })
+    }
+    else if (row.action === "launchact") {
+      // Back to the package's page, then the launch with the activity named;
+      // the answer re-reads the package so the note and the picker row show the pick.
+      var picked = row.pkg
+      pop()
+      act(["app", "launch", row.pkg, row.component], function(doc) {
+        if (doc && doc.ok !== false && root.page === "actions" && root.current.pkg === picked) root.store.fetchPackage(picked)
+      })
+    }
     else if (row.action === "avdstop") openConfirm(row)
     else if (row.action === "openwindow") openAsWindowRow()
     else if (row.page) push({ page: row.page })
@@ -1140,6 +1206,13 @@ FocusScope {
   function runAppAction(row) {
     var pkg = row.pkg
     if (row.act === "deeplink") { push({ page: "deeplink", pkg: pkg }); return }
+    if (row.act === "pick") { push({ page: "launchpick", pkg: pkg }); return }
+    if (row.act === "launch") {
+      // Several launcher activities and none picked yet: the picker first;
+      // once one is picked (or with one activity) Launch goes straight on.
+      var info = store ? store.packageDetails[pkg] : null
+      if (hasSeveralLaunchers(info) && !info.launcher_picked) { push({ page: "launchpick", pkg: pkg }); return }
+    }
     if (row.act === "grant" || row.act === "revoke") { act(["perms", row.act, pkg]); return }
     if (row.act === "uninstall") {
       if (store && store.flag("confirmUninstall", true)) { openConfirm(row); return }

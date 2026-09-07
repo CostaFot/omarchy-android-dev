@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.2
+
+The README in a lighter register: the lead and the bar section by Costa, the rest to match.
+
+- README: every page under *The panel* is its own heading with a short intro and a bullet list instead of one dense paragraph; the window, requirements, *How it runs* and the FAQ shortened the same way. The commands, the settings table and the screenshots are unchanged. Still being edited.
+
 ## 1.12.1
 
 The pointer for people who set the plugin up through a coding agent (board issue COS-117).

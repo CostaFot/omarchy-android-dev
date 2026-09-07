@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "costafot.android-dev",
   "name": "Android Dev",
-  "version": "1.12.1",
+  "version": "1.12.2",
   "author": "CostaFot",
   "license": "MIT",
   "description": "The Android developer's side of a device, on the bar: adb devices and the device at a glance, packages and their actions, developer toggles, dark mode and the display scales, screenshots, deep links, APKs, the emulator, scrcpy with the phone's keys beside it, logcat, wireless debugging.",

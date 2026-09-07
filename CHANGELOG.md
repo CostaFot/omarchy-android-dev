@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.1
+
+Two small fixes (board issues COS-102 and COS-104).
+
+- Fixed: `omarchy-shell costafot.android-dev page NAME` with the panel closed opened it on the first bar widget the service knew of, which on a two-monitor bar could be the other screen's; `open` and `toggle` went through the shell and picked the focused monitor. `page` now goes the same way: the page waits in the service and the widget the shell summons takes it as it opens.
+- Fixed: an Apps page with nothing marked Running or Foreground on a device whose `ps -A` prints no user column (some vendor ROMs do; neither phone here). When ps names no app process at all, the helper reads `dumpsys activity processes` once and takes the running packages from its process list, the same user-0 app-uid range ps's `u0_a` rows cover, so the two paths tag the same packages (checked against the emulator's own ps: equal sets). A ps that fails outright falls back the same way. On every other device nothing changes: no extra call.
+- Tests: 220.
+
 ## 1.6.0
 
 The folders you install from, kept (board issue COS-80).

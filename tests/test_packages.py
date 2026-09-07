@@ -36,6 +36,19 @@ class Parsing(unittest.TestCase):
         self.assertIn("com.google.android.googlequicksearchbox", running)  # only a :interactor row in the fixture
         self.assertNotIn("init", running)
 
+    def test_activity_processes_fallback_takes_the_same_uid_range_as_ps(self):
+        running = pkgmod.parse_activity_processes(fixture("dumpsys_activity_processes.txt"))
+        self.assertIn(TEMPLATE, running)
+        self.assertIn("com.google.android.googlequicksearchbox", running)  # only a :interactor row in the fixture
+        self.assertIn("com.google.android.projection.gearhead", running)  # a :car sub-process
+        self.assertIn("com.android.systemui", running)  # a system app with an app uid, as ps counts it
+        self.assertNotIn("system", running)  # /1000
+        self.assertNotIn("com.android.dynsystem", running)  # /1000 too
+        self.assertNotIn("com.android.vending", running)  # a work-profile user, /u10a145
+        self.assertNotIn("com.android.chrome", running)  # an isolated process, /u0i4
+        self.assertFalse(any(n.startswith(".") for n in running))  # `.adservices` is no package name
+        self.assertEqual(pkgmod.parse_activity_processes(""), set())
+
     def test_foreground_from_dumpsys_window(self):
         self.assertEqual(pkgmod.parse_foreground(fixture("dumpsys_window.txt")), "com.android.chrome")
         self.assertIsNone(pkgmod.parse_foreground("mCurrentFocus=null\n"))
@@ -113,7 +126,36 @@ class Listing(FakeAdbCase):
         self.assertIn(f"-s {SERIAL} shell ps -A", calls)
         self.assertIn(f"-s {SERIAL} shell dumpsys window", calls)
         self.assertFalse(any("dumpsys package packages" in c for c in calls))
+        self.assertFalse(any("dumpsys activity processes" in c for c in calls))  # ps had the rows
         self.assertTrue(os.path.exists(os.path.join(self.state_dir, "packages-emulator-5554.json")))
+
+    def test_ps_without_the_user_column_falls_back_to_dumpsys_activity_processes(self):
+        self.add_rules(
+            {"match": "shell ps -A", "stdout": "  PID  NAME\n 1117 com.android.systemui\n 4102 " + TEMPLATE + "\n"},
+            {"match": "shell dumpsys activity processes", "stdout_file": "dumpsys_activity_processes.txt"},
+        )
+        doc = pkgmod.list_packages(Adb(FAKE_ADB, "override", None), SERIAL, State(), Settings())
+        self.assertEqual(doc["packages"][0]["name"], TEMPLATE)
+        self.assertEqual(doc["packages"][0]["section"], "Running")
+        self.assertFalse(doc["packages"][1]["running"])
+        self.assertIn(f"-s {SERIAL} shell dumpsys activity processes", self.joined_calls())
+
+    def test_a_failing_ps_falls_back_the_same_way(self):
+        self.add_rules(
+            {"match": "shell ps -A", "stderr": "ps: bad -A\n", "code": 1},
+            {"match": "shell dumpsys activity processes", "stdout_file": "dumpsys_activity_processes.txt"},
+        )
+        doc = pkgmod.list_packages(Adb(FAKE_ADB, "override", None), SERIAL, State(), Settings())
+        self.assertEqual(doc["packages"][0]["detail"], "running")
+        self.assertIn(f"-s {SERIAL} shell dumpsys activity processes", self.joined_calls())
+
+    def test_both_reads_failing_lists_nothing_as_running(self):
+        self.add_rules(
+            {"match": "shell ps -A", "stdout": "  PID  NAME\n"},
+            {"match": "shell dumpsys activity processes", "stderr": "error: closed\n", "code": 1},
+        )
+        doc = pkgmod.list_packages(Adb(FAKE_ADB, "override", None), SERIAL, State(), Settings())
+        self.assertFalse(any(p["running"] for p in doc["packages"]))
 
     def test_show_system_apps_drops_the_third_party_flag(self):
         pkgmod.list_packages(Adb(FAKE_ADB, "override", None), SERIAL, State(), Settings({"showSystemApps": True}))

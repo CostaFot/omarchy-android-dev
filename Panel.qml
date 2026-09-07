@@ -91,9 +91,13 @@ Panel {
   }
 
   // IPC `page NAME`: open straight onto a page, with the hub under it.
-  function showPage(name) {
+  function stackFor(name) {
     var target = ipcPages.indexOf(name) !== -1 ? name : "hub"
-    var next = target === "hub" ? [{ page: "hub" }] : [{ page: "hub" }, { page: target }]
+    return target === "hub" ? [{ page: "hub" }] : [{ page: "hub" }, { page: target }]
+  }
+
+  function showPage(name) {
+    var next = stackFor(name)
     if (opened) {
       stack = next
       enterPage(next[next.length - 1])
@@ -1192,9 +1196,17 @@ Panel {
   onOpenedChanged: {
     if (opened) {
       if (store) store.refreshStatus()
-      if (pendingStack) {
-        stack = pendingStack
-        pendingStack = null
+      // A page asked for while closed: this panel's own (the no-shell
+      // path), else the one the service holds for whichever widget the
+      // shell summoned.
+      var pending = pendingStack
+      pendingStack = null
+      if (!pending && service && typeof service.takePendingPage === "function") {
+        var page = service.takePendingPage()
+        if (page) pending = stackFor(page)
+      }
+      if (pending) {
+        stack = pending
         enterPage(stack[stack.length - 1])
       } else {
         goHome()

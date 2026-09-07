@@ -5,7 +5,9 @@ Windows parsed the whole `dumpsys package packages` dump for the DEBUGGABLE
 flag; here `debuggable` comes from a targeted `dumpsys package PKG` the
 first time a package is opened and is remembered in packages-<serial>.json,
 so the list costs three cheap calls (`pm list packages [-3]`, `ps -A`,
-`dumpsys window`) and never the full dump.
+`dumpsys window`) and never the full dump. A fourth, `dumpsys activity
+processes`, only when `ps -A` names no app process at all (some vendor
+ROMs print it without the user column).
 """
 
 import re
@@ -48,6 +50,27 @@ def parse_ps(text):
         if len(parts) < 9:
             continue
         name = parts[-1].split(":")[0]
+        if valid_package(name):
+            running.add(name)
+    return running
+
+
+_PROC_RE = re.compile(r"\b\d+:(?P<name>[A-Za-z0-9_.]+)(?::[^/\s]*)?/u0a\d+")
+
+
+def parse_activity_processes(text):
+    """Package names with a process, from `dumpsys activity processes`:
+    the fallback when `ps -A` yields no `u0_a*` row (some vendor ROMs print
+    ps without the user column). Every process there is written
+    `PID:NAME/UID` (the ProcessRecords, the LRU list, the PID mappings), and
+    `/u0aN` is user 0's app uid range, the range ps's `u0_a*` rows cover: so
+    a system app with an app uid counts on both paths, `system/1000` and an
+    isolated process (`/u0i4`) on neither, and a sub-process counts for its
+    package as with ps. Verified against the emulator's own ps on 2026-09-07:
+    the two sets were equal."""
+    running = set()
+    for m in _PROC_RE.finditer(str(text or "")):
+        name = m.group("name")
         if valid_package(name):
             running.add(name)
     return running
@@ -171,6 +194,14 @@ def list_packages(adb, serial, state, settings):
         running = parse_ps(adb.shell(serial, "ps", "-A", cap=fmt.CAP_PACKAGES).text)
     except AdbError:
         running = set()
+    if not running:
+        # No app row at all: a ps without the user column (some vendor ROMs)
+        # or a ps that failed. An Android with any app process has systemui
+        # under u0_a, so an empty set is never the truth.
+        try:
+            running = parse_activity_processes(adb.shell(serial, "dumpsys", "activity", "processes", cap=fmt.CAP_PACKAGES).text)
+        except AdbError:
+            running = set()
     foreground = foreground_package(adb, serial)
     cache = state.package_cache(serial) if state else {}
     packages = []

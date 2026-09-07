@@ -1,0 +1,50 @@
+ACTIVITY MANAGER RUNNING PROCESSES (dumpsys activity processes)
+  All known processes:
+  *APP* UID 10225 ProcessRecord{8ffecfa 1074:com.google.android.ext.services/u0a225}
+    user #0 uid=10225 gids={50225, 20225, 9997}
+    processInfo:
+      deny: android.permission.INTERNET
+  *APP* UID 10159 ProcessRecord{9f80919 3109:com.google.android.projection.gearhead:car/u0a159}
+    user #0 uid=10159 gids={3002, 3003, 3001, 50159, 20159, 9997, 1077}
+    mRequiredAbi=x86_64 instructionSet=null 
+    class=com.google.android.apps.auto.components.app.stubapp.GhStubApplication 
+  *APP* UID 1000 ProcessRecord{5b4ad43 2750:com.android.dynsystem/1000}
+    user #0 uid=1000 gids={1065, 3002, 3003, 3001, 3007, 1007, 1096, 1000, 9997, 1079, 1077}
+    mRequiredAbi=x86_64 instructionSet=x86_64 
+    dir=/system/priv-app/DynamicSystemInstallationService/DynamicSystemInstallationService.apk publicDir=/system/priv-app/DynamicSystemInstallationService/DynamicSystemInstallationService.apk data=/data/user/0/com.android.dynsystem 
+  *PERS* UID 1000 ProcessRecord{14e9db1 656:system/1000}
+    user #0 uid=1000 gids={}
+    mRequiredAbi=null instructionSet=null 
+    dir=/system/framework/framework-res.apk publicDir=/system/framework/framework-res.apk data=/data/system 
+  *APP* UID 10193 ProcessRecord{51d4990 1050:com.google.android.apps.nexuslauncher/u0a193}
+    user #0 uid=10193 gids={50193, 20193, 9997}
+    mRequiredAbi=x86_64 instructionSet=null 
+    class=com.android.launcher3.LauncherApplication 
+  *APP* UID 10150 ProcessRecord{5063240 1631:com.google.android.googlequicksearchbox:interactor/u0a150}
+    user #0 uid=10150 gids={1005, 3002, 3003, 3001, 50150, 20150, 9997}
+    mRequiredAbi=x86_64 instructionSet=x86_64 
+    class=com.google.android.apps.gsa.binaries.satin.app.SatinMultiprocessRoot_Application 
+  *PERS* UID 10190 ProcessRecord{444c157 917:com.android.systemui/u0a190}
+    user #0 uid=10190 gids={1065, 3002, 3003, 3001, 3006, 50190, 20190, 9997, 1077}
+    mRequiredAbi=x86_64 instructionSet=x86_64 
+    class=com.android.systemui.application.impl.SystemUIApplicationImpl 
+  *APP* UID 10231 ProcessRecord{3a1b2c3 4102:com.costafotiadis.androidtemplate.compose.debug/u0a231}
+    user #0 uid=10231 gids={50231, 20231, 9997}
+    mRequiredAbi=x86_64 instructionSet=null
+  *APP* UID 1010145 ProcessRecord{4d5e6f7 4190:com.android.vending/u10a145}
+    user #10 uid=1010145 gids={51010145, 21010145, 9997}
+  *APP* UID 99004 ProcessRecord{5e6f7a8 4211:com.android.chrome:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0/u0i4}
+    user #0 uid=99004 gids={}
+  *APP* UID 10225 ProcessRecord{54c8591 2997:.adservices/u0a225}
+    user #0 uid=10225 gids={50225, 20225, 9997}
+  Process LRU list (sorted by oom_adj, 63 total, non-act at 1, non-svc at 1):
+    PERS #62: sys      F/ /PER  LCMNFUATI  t: 0 656:system/1000 (provider)
+        com.android.providers.settings/.SettingsProvider<=Proc{917:com.android.systemui/u0a190}
+    PERS #61: pers     F/ /PER  LCMNFUATI  t: 0 917:com.android.systemui/u0a190 (fixed)
+    PERS #60: pers     F/ /PER  LCMNFUATI  t: 0 1012:com.android.networkstack.process/1073 (fixed)
+    PERS #59: pers     F/ /PER  LCMNFUATI  t: 0 1029:com.android.se/1068 (fixed)
+    Proc #61: cch+35 B/ /CEM  LCMNFUATI  t: 0 4102:com.costafotiadis.androidtemplate.compose.debug/u0a231 (cch-empty)
+  PID mappings:
+    PID #656: ProcessRecord{14e9db1 656:system/1000}
+    PID #917: ProcessRecord{444c157 917:com.android.systemui/u0a190}
+    PID #1012: ProcessRecord{ae9024a 1012:com.android.networkstack.process/1073}

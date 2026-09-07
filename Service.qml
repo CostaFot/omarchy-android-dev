@@ -11,7 +11,8 @@ import Quickshell.Io
 // code is up), the device notifications and the plugin's IPC target. Bar widgets register themselves as hosts; the first one lends
 // its settings (the shell injects settings only into bar widgets) and the
 // panel verbs route through the shell's own summon/hide, which picks the
-// widget on the focused monitor.
+// widget on the focused monitor (`page NAME` too: the page waits here for
+// whichever widget the shell opens).
 Item {
   id: root
 
@@ -476,12 +477,37 @@ Item {
 
   function togglePanel() { return opened ? closePanel() : openPanel() }
 
+  // `page NAME` with the panel closed goes through the shell's summon like
+  // `open`, so the widget on the focused monitor answers (before 1.6.1 the
+  // first registered widget opened, on whichever monitor it sat). The
+  // summon carries no payload on the bar-widget path, so the page waits
+  // here and the panel that opens takes it (`takePendingPage` from its
+  // `onOpenedChanged`); a summon that opens nothing lets it lapse.
+  property string pendingPage: ""
+  Timer { id: pendingPageExpiry; interval: 3000; onTriggered: root.pendingPage = "" }
+  function takePendingPage() {
+    var page = pendingPage
+    pendingPage = ""
+    pendingPageExpiry.stop()
+    return page
+  }
+
   function showPage(name) {
     if (hosts.length === 0) return "no bar widget placed"
-    var target = host
-    for (var i = 0; i < hosts.length; i++) if (hosts[i].opened === true) { target = hosts[i]; break }
-    if (typeof target.showPage !== "function") return "no panel"
-    target.showPage(String(name))
+    for (var i = 0; i < hosts.length; i++) if (hosts[i].opened === true) {
+      if (typeof hosts[i].showPage !== "function") return "no panel"
+      hosts[i].showPage(String(name))
+      return "opened"
+    }
+    if (shell && typeof shell.summon === "function") {
+      pendingPage = String(name)
+      pendingPageExpiry.restart()
+      if (shell.summon(pluginId, "")) return "opened"
+      takePendingPage()
+      return "no bar widget placed"
+    }
+    if (typeof host.showPage !== "function") return "no panel"
+    host.showPage(String(name))
     return "opened"
   }
 

@@ -238,4 +238,4 @@ Every change that a user can see bumps the `manifest.json` version with its `CHA
 
 ## Board
 
-This repo is the Linear project **omarchy-android-dev** on Costa's public board (https://www.costafotiadis.com/board/). The `board` skill has the commands. Issues for this repo carry that project and one area label (`omarchy`). Follow-ups (a deferred fix, a check that waits on something external, a TODO written here) become an issue before the session ends; a note in this file is not a substitute.
+This repo is the Linear project **omarchy-android-dev** on Costa's public board (https://www.costafotiadis.com/board/). The `board` skill has the commands. Issues for this repo carry that project and one area label (`omarchy`). Follow-ups (a deferred fix, a check that waits on something external, a TODO written here) become an issue before the session ends; a note in this file is not a substitute. The open issues are ordered: each description starts with an **Order N of M** line naming its session and the version it ships as (set 2026-09-07); a session picks the lowest Order still in Todo, and the marketplace submission (COS-109) waits for Costa's word.

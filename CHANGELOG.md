@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.12.1
+
+The pointer for people who set the plugin up through a coding agent (board issue COS-117).
+
+- README: a *From a coding agent* section at the end. It says `AGENTS.md` ships with the plugin and what it covers (the settings and their `omarchy bar set` form, the IPC verbs, the helper's commands and their JSON, the popup and window routing, the constraints), that an agent working in the plugin's folder reads it on its own and how to hand it the path from anywhere else, and that `help` and `status` let it check its own work. The one-line pointer under the install command now points at that section.
+- `AGENTS.md` opens with a paragraph for a reader who is not the next session's agent, naming the two sections a configuring agent needs.
+
 ## 1.12.0
 
 The Device info page (board issue COS-85).

@@ -10,7 +10,7 @@ Started as a port of the Windows [ADB Extension for Command Palette](https://git
 omarchy plugin add https://github.com/CostaFot/omarchy-android-dev --enable
 ```
 
-Setting it up from a coding agent? Point it at `~/.config/omarchy/plugins/costafot.android-dev/AGENTS.md`: every setting, IPC verb and helper command, and `bin/omarchy-android-dev` answers in JSON.
+Setting it up from a coding agent? See [From a coding agent](#from-a-coding-agent) at the end.
 
 ## In the bar
 
@@ -260,6 +260,18 @@ State lives in `~/.local/state/omarchy/costafot.android-dev/`: the selected devi
 **A recording was running when the shell restarted.** The device finishes the file on its own; it stays at `/sdcard/omarchy-android-dev-<stamp>.mp4` and the plugin does not pull leftovers. `adb pull` it and remove it by hand.
 
 **What is different from the Windows extension?** Global per-action favourites are replaced by the last package per device and the recent deep links. The panel stays open after an action. Installs pass `-t` so debug builds install. A package with only a service process counts as Running. Uninstall asks first, and can be told not to.
+
+## From a coding agent
+
+The plugin ships with `AGENTS.md`, the reference an agent needs to configure it or script it: every setting with its type and the `omarchy bar set` form, every IPC verb with its argument shape, the helper's commands and the JSON each one answers, how the popup and the window are opened and routed, and the constraints that must not be undone. Everything in it is the current state, checked against the code before each release.
+
+An agent working inside the plugin's folder finds it on its own: Claude Code reads it through `CLAUDE.md`, and Codex, opencode and the rest read `AGENTS.md` by convention. Working from anywhere else, hand it the path:
+
+```
+Read ~/.config/omarchy/plugins/costafot.android-dev/AGENTS.md, then bind SUPER + ALT + A to the panel and point adbPath at my SDK.
+```
+
+`omarchy-shell costafot.android-dev help` lists the verbs and the settings live, `status` answers one JSON line with the settings in force, and `bin/omarchy-android-dev help` does the same for the helper, so an agent can check its own work without opening the panel.
 
 ## Update and uninstall
 

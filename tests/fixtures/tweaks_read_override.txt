@@ -1,0 +1,5 @@
+api=37
+night=Night mode: yes
+font=1.15
+Physical density: 420
+Override density: 482

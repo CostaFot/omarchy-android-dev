@@ -1,0 +1,4 @@
+api=37
+night=Night mode: no
+font=1.0
+Physical density: 420

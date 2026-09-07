@@ -62,6 +62,7 @@ FocusScope {
     if (page === "packages") store.refreshPackages()
     else if (page === "actions") store.fetchPackage(current.pkg)
     else if (page === "toggles") store.refreshToggles()
+    else if (page === "tweaks" || page === "fontpick" || page === "densitypick") store.refreshTweaks()
     else if (page === "apks") { resetInstalls(); listApks() }
     else if (page === "tools") store.refreshTools()
     else if (page === "wireless" || (page === "paircode" && !current.addr)) store.refreshWireless()
@@ -82,11 +83,12 @@ FocusScope {
 
   readonly property var pageTitles: ({
     hub: "Android Dev", devices: "Devices", packages: "Apps", actions: "", deeplink: "Deep link", toggles: "Toggles",
+    tweaks: "Tweaks", fontpick: "Font scale", densitypick: "Display scale",
     capture: "Capture", apks: "APKs", text: "Send text", tools: "Tools", wireless: "Wireless",
     paircode: "Pair with a code", settings: "Settings", avdboot: "", launchpick: ""
   })
   // Pages the IPC `page` verb may open straight onto.
-  readonly property var ipcPages: ["hub", "devices", "packages", "deeplink", "toggles", "capture", "apks", "text", "tools", "wireless", "settings"]
+  readonly property var ipcPages: ["hub", "devices", "packages", "deeplink", "toggles", "tweaks", "capture", "apks", "text", "tools", "wireless", "settings"]
 
   function push(entry) {
     var top = Object.assign({}, current, { cursor: selectedIndex, query: filterField.text })
@@ -133,6 +135,7 @@ FocusScope {
       if (entry.page === "packages") store.refreshPackages()
       else if (entry.page === "actions" && entry.pkg) store.fetchPackage(entry.pkg)
       else if (entry.page === "toggles") store.refreshToggles()
+      else if (entry.page === "tweaks") store.refreshTweaks()
       else if (entry.page === "apks") { resetInstalls(); listApks() }
       else if (entry.page === "tools") store.refreshTools()
       else if (entry.page === "wireless" || (entry.page === "paircode" && !entry.addr)) store.refreshWireless()
@@ -176,6 +179,9 @@ FocusScope {
     else if (page === "actions") body = actionRows()
     else if (page === "deeplink") body = deeplinkRows()
     else if (page === "toggles") body = toggleRows()
+    else if (page === "tweaks") body = tweakRows()
+    else if (page === "fontpick") body = fontPickRows()
+    else if (page === "densitypick") body = densityPickRows()
     else if (page === "capture") body = captureRows()
     else if (page === "apks") body = apkRows()
     else if (page === "text") body = textRows()
@@ -200,6 +206,7 @@ FocusScope {
     { icon: "\uf00a", label: "Apps", detail: "Packages, their actions and deep links", page: "packages" },
     { icon: "\uf0c1", label: "Deep link", detail: "Open a URL on the device", page: "deeplink" },
     { icon: "\uf1de", label: "Toggles", detail: "Animations, touches, layout bounds, airplane, Wi-Fi, data, Bluetooth, demo mode", page: "toggles" },
+    { icon: "\uf042", label: "Tweaks", detail: "Dark mode, font scale, display scale", page: "tweaks" },
     { icon: "\uf030", label: "Capture", detail: "Screenshot and screen recording", page: "capture" },
     { icon: "\uf1b2", label: "APKs", detail: "Install from a folder", page: "apks" },
     { icon: "\uf11c", label: "Send text", detail: "Type text or the clipboard on the device", page: "text" },
@@ -508,6 +515,86 @@ FocusScope {
       out.push({ type: "action", icon: icon, label: v.label || name, detail: (v.text || "unknown") + " · " + toggleCommands[name],
                  action: "toggle", name: name })
     }
+    return out
+  }
+
+  // ---- Tweaks ---------------------------------------------------------------
+  // Dark mode, the font scale and the display density: the values and the
+  // steps come from the helper, the command text is a literal. Enter flips
+  // dark mode and opens a picker for the two scales; a `tweak` answer
+  // carries all three, so the page repaints from it.
+  readonly property var tweakCommands: ({
+    dark: "cmd uimode night yes|no",
+    font: "settings put system font_scale",
+    density: "wm density"
+  })
+
+  function hasOverride(density) {
+    return !!density && density.override !== null && density.override !== undefined
+  }
+
+  function tweakRows() {
+    var s = root.store
+    var out = []
+    if (!deviceGate(out)) return out
+    var t = s.tweaks
+    if (!t) {
+      out.push({ type: "note", label: s.busy && s.runningCommand === "tweaks" ? "Reading the tweaks…" : "Press r to read the tweaks" })
+      return out
+    }
+    var dark = t.dark || {}
+    var font = t.font || {}
+    var density = t.density || {}
+    // nf-fa-toggle_on / toggle_off / question, font, arrows-alt, as escapes.
+    out.push({ type: "action", icon: dark.on === true ? "\uf205" : dark.on === false ? "\uf204" : "\uf128",
+               label: dark.label || "Dark mode", detail: (dark.text || "unknown") + " · " + tweakCommands.dark,
+               action: "tweak", name: "dark" })
+    out.push({ type: "action", icon: "\uf031", label: font.label || "Font scale",
+               detail: (font.text || "unknown") + " · " + tweakCommands.font, action: "fontpick" })
+    out.push({ type: "action", icon: "\uf0b2", label: density.label || "Display scale",
+               detail: (density.text || "unknown") + " · " + tweakCommands.density,
+               urgent: hasOverride(density), action: "densitypick" })
+    if (hasOverride(density))
+      out.push({ type: "note", label: "A density override survives a reboot", detail: "Default in the picker puts the physical density back (wm density reset)" })
+    return out
+  }
+
+  // ---- The two scale pickers ---------------------------------------------
+  // One row per step the helper lists, a check on the current one; Enter
+  // goes back to Tweaks and sets it, and the answer repaints the page.
+  function fontPickRows() {
+    var t = root.store.tweaks
+    var font = t && t.font ? t.font : null
+    var out = []
+    if (!font || !Array.isArray(font.steps) || font.steps.length === 0) {
+      out.push({ type: "note", label: "Press r to read the tweaks" })
+      return out
+    }
+    out.push({ type: "note", label: "Android's own font size steps", detail: "Enter sets one; the apps on screen take it at once" })
+    for (var i = 0; i < font.steps.length; i++) {
+      var st = font.steps[i]
+      out.push({ type: "action", icon: st.current ? "\uf00c" : "\uf031", label: st.text || "", detail: st.detail || "",
+                 action: "fontset", value: st.text })
+    }
+    return out
+  }
+
+  function densityPickRows() {
+    var t = root.store.tweaks
+    var d = t && t.density ? t.density : null
+    var out = []
+    if (!d || !Array.isArray(d.steps) || d.steps.length === 0) {
+      out.push({ type: "note", label: d && d.text === "unknown" ? "The device did not answer wm density" : "Press r to read the tweaks" })
+      return out
+    }
+    out.push({ type: "note", label: "The Display size steps, from the physical density", detail: "Enter sets one; every app on screen restarts with it" })
+    for (var i = 0; i < d.steps.length; i++) {
+      var st = d.steps[i]
+      // nf-fa-undo for the reset stop.
+      out.push({ type: "action", icon: st.current ? "\uf00c" : st.reset ? "\uf0e2" : "\uf0b2", label: st.text || "", detail: st.detail || "",
+                 action: "densityset", value: st.value, reset: st.reset === true })
+    }
+    out.push({ type: "note", label: "An override survives a reboot", detail: "Default puts the physical density back; a phone left on Largest stays that way" })
     return out
   }
 
@@ -859,6 +946,8 @@ FocusScope {
     if (page === "actions") return "j/k move · Enter runs it · Esc back"
     if (page === "deeplink") return "Type a URL, Enter launches · ↑/↓ recent · Esc back"
     if (page === "toggles") return "j/k move · Enter flips · r reads again · Esc back"
+    if (page === "tweaks") return "j/k move · Enter flips or picks · r reads again · Esc back"
+    if (page === "fontpick" || page === "densitypick") return "j/k move · Enter sets it · r reads again · Esc back"
     if (page === "capture") return "j/k move · Enter runs it · Esc back"
     if (page === "apks") return "Type a folder · Enter installs or opens · r lists again · Esc back"
     if (page === "text") return "Type a line, Enter sends it · ↑/↓ move · Esc back"
@@ -1173,6 +1262,11 @@ FocusScope {
     else if (row.action === "deeplink") act(["deeplink", row.url].concat(row.pkg ? [row.pkg] : []))
     else if (row.action === "app") runAppAction(row)
     else if (row.action === "toggle") act(["toggle", row.name])
+    else if (row.action === "tweak") act(["tweak", row.name])
+    else if (row.action === "fontpick") push({ page: "fontpick" })
+    else if (row.action === "densitypick") push({ page: "densitypick" })
+    else if (row.action === "fontset") { pop(); act(["tweak", "font", String(row.value)]) }
+    else if (row.action === "densityset") { pop(); act(["tweak", "density", row.reset ? "reset" : String(row.value)]) }
     else if (row.action === "screenshot") act(["screenshot"])
     else if (row.action === "record") { if (service && typeof service.toggleRecording === "function") service.toggleRecording() }
     else if (row.action === "apkdir") filterField.text = row.dir  // the folder box; the list follows, debounced

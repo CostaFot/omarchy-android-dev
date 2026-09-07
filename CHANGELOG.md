@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.10.0
+
+The Tweaks page (board issue COS-84).
+
+- Added: a **Tweaks** page on the hub, under Toggles, for the display settings flipped while checking a UI: *Dark mode* (`cmd uimode night yes|no`, Enter flips it), *Font scale* (`settings put system font_scale`) and *Display scale* (`wm density`), each with its current value read from the device in one call. Enter on either scale opens a picker with Android's own steps (the font size stops 0.85 to 2.0; the Display size stops as ratios of the physical density, Small to Largest, made even as Settings does), a check on the current one; Enter sets it and goes back. The Default stop of the display picker is `wm density reset`, because an override survives a reboot and leaves a phone looking odd until it is put back; the page says so under the row while one is set.
+- Added: the helper's `tweaks` (the three with their steps) and `tweak dark [on|off]`, `tweak font [SCALE|next]`, `tweak density [DPI|reset|next]` (`next` steps through the stops, wrapping), and the IPC verbs `dark on|off|toggle`, `fontscale SCALE|next` and `density DPI|reset|next`, so a keybinding can flip dark mode or step the font size while looking at the app. `page tweaks` and `window tweaks` open the page.
+- Tests: 246.
+
 ## 1.9.0
 
 Two small choice pages (board issues COS-91 and COS-105).

@@ -165,6 +165,29 @@ class ManifestMatchesTheQml(unittest.TestCase):
         self.assertIn('root.act(["tool", "avd", n, "cold"])', self.service)
         self.assertRegex(self.service, r'"  avdcold NAME\s')
 
+    def test_the_tweaks_page_is_wired(self):
+        # 1.10.0: the Tweaks page (dark mode, the font scale, the display
+        # density) is an IPC page; its two pickers are not (they need the
+        # page's document under them); the three verbs reach the helper's
+        # `tweak` and the store reads `tweaks` like the toggles.
+        pages = js_literal(self.panel, "ipcPages", "]")
+        self.assertIn("tweaks", pages)
+        self.assertIn('page: "tweaks"', self.panel)
+        for page in ("fontpick", "densitypick"):
+            self.assertIn(f'page: "{page}"', self.panel, page)
+            self.assertNotIn(page, pages)
+        self.assertIn('act(["tweak", row.name])', self.panel)
+        self.assertIn('act(["tweak", "font", String(row.value)])', self.panel)
+        self.assertIn('act(["tweak", "density", row.reset ? "reset" : String(row.value)])', self.panel)
+        self.assertIn("function refreshTweaks()", self.store)
+        self.assertIn("tweaks", js_literal(self.store, "readCommands", "]"))
+        self.assertIn("tweaks = d.tweaks", self.store)
+        for verb in ("dark", "fontscale", "density"):
+            self.assertRegex(self.service, rf"function {verb}\([a-z]+: string\): string", verb)
+            self.assertRegex(self.service, rf'"  {verb} ', verb)
+        self.assertIn('root.act(["tweak", "dark", m])', self.service)
+        self.assertIn('root.act(["tweak", "density", "reset"])', self.service)
+
     def test_help_names_every_setting(self):
         for key in SETTING_DEFAULTS:
             self.assertIn(key, self.service, key)

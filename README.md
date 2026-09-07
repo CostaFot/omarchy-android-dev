@@ -51,6 +51,13 @@ It opens on a hub: the selected device with its state, then the pages, and a las
 **Toggles** are Animations, Show touches, Pointer location, Layout bounds, Airplane mode, Wi-Fi, Mobile data, Bluetooth and Demo mode, each with its current state read from the device in one call. Enter flips one and every row repaints from the answer. Each row names the adb command behind it. Demo mode is Android's clean status bar for screenshots and recordings: the clock at 12:00, a full battery and full signal, no notification icons. Vendor skins honour it in part; an HONOR phone on Android 16 took the battery and the notification icons but kept its real clock and signal bars.
 
 <p>
+<img src="assets/screenshots/tweaks.png" width="300" alt="the tweaks page: dark mode, font scale, display scale">
+<img src="assets/screenshots/tweaks-display.png" width="300" alt="the display scale picker with Android's steps">
+</p>
+
+**Tweaks** are the display settings you flip while checking a UI: Dark mode, Font scale and Display scale, each with its current value read from the device in one call. Enter on Dark mode flips it (`cmd uimode night`); Enter on a scale opens a picker with Android's own steps, the font size stops from 0.85 to 2.0 and the Display size stops as ratios of the physical density, Small to Largest, a check on the current one. Enter sets it and goes back. The Default stop of the display picker is `wm density reset`: a density override survives a reboot and leaves a phone looking odd until it is put back, so the page says so under the row while one is set. Over IPC, `dark toggle`, `fontscale next` and `density next` step through them from a keybinding.
+
+<p>
 <img src="assets/screenshots/capture.png" width="300" alt="the capture page">
 <img src="assets/screenshots/capture-recording.png" width="300" alt="the capture page while a recording runs">
 </p>
@@ -123,11 +130,12 @@ omarchy-shell costafot.android-dev toggle        # the hub (the window instead, 
 omarchy-shell costafot.android-dev status | jq   # adb, devices, the tracker, the settings in force
 omarchy-shell costafot.android-dev screenshot    # saved, on the clipboard, with a notification
 omarchy-shell costafot.android-dev select emulator-5554
-omarchy-shell costafot.android-dev page packages # open the panel on a page: hub, devices, packages, deeplink, toggles, capture, apks, text, tools, wireless, settings
+omarchy-shell costafot.android-dev page packages # open the panel on a page: hub, devices, packages, deeplink, toggles, tweaks, capture, apks, text, tools, wireless, settings
 omarchy-shell costafot.android-dev window toggle # the same pages as their own window; open, close, or a page name (window toggles) work too
 omarchy-shell costafot.android-dev launch com.android.chrome   # forcestop and clear take a package too
 omarchy-shell costafot.android-dev deeplink https://example.com
 omarchy-shell costafot.android-dev flip touches  # animations, touches, pointer, layout, airplane, wifi, data, bluetooth, demo
+omarchy-shell costafot.android-dev dark toggle   # or on, off; fontscale 1.15|next and density 482|reset|next are the other two tweaks
 omarchy-shell costafot.android-dev record start  # stop pulls the mp4 into ~/Videos; toggle does either
 omarchy-shell costafot.android-dev text "hello world"          # typed into the focused field; clipboard sends the clipboard
 omarchy-shell costafot.android-dev scrcpy                      # mirror the selected device
@@ -160,7 +168,7 @@ bindd = SUPER ALT, C, Android screenshot, exec, omarchy-shell costafot.android-d
 To put the panel on the Omarchy menu (`SUPER + SPACE`), add a row to `~/.config/omarchy/extensions/omarchy-menu.jsonc`; the second line puts a screenshot row under the Capture submenu:
 
 ```jsonc
-"android": {"icon":"","label":"Android Dev","action":"omarchy-shell costafot.android-dev toggle","description":"Devices, apps, toggles, captures, APKs, emulators"},
+"android": {"icon":"","label":"Android Dev","action":"omarchy-shell costafot.android-dev toggle","description":"Devices, apps, toggles, tweaks, captures, APKs, emulators"},
 "trigger.capture.android": {"icon":"","label":"Android screenshot","action":"omarchy-shell costafot.android-dev screenshot"},
 ```
 
@@ -193,6 +201,8 @@ bin/omarchy-android-dev perms grant com.android.chrome | jq .notice      # or re
 bin/omarchy-android-dev deeplink https://example.com | jq .notice
 bin/omarchy-android-dev toggles | jq '.toggles | map_values(.text)'
 bin/omarchy-android-dev toggle touches | jq .notice                     # animations, touches, pointer, layout, airplane, wifi, data, bluetooth, demo
+bin/omarchy-android-dev tweaks | jq '.tweaks | map_values(.text)'        # dark mode, the font scale, the display density
+bin/omarchy-android-dev tweak dark | jq .notice                          # tweak font 1.15|next, tweak density 482|reset|next
 bin/omarchy-android-dev screenshot | jq .path                           # saved, on the clipboard, with a notification
 bin/omarchy-android-dev record                                          # records until Ctrl-C, then prints the mp4's path
 bin/omarchy-android-dev select emulator-5554 | jq .notice               # with more than one device attached; --serial S does it per call
@@ -232,6 +242,8 @@ State lives in `~/.local/state/omarchy/costafot.android-dev/`: the selected devi
 **Typing and taps do nothing on my phone.** Some vendor ROMs block input injection over adb until *USB debugging (Security settings)* is enabled in the developer options. For scrcpy the usual answer is `--keyboard=uhid --mouse=uhid`, which go in the *Extra scrcpy arguments* setting.
 
 **The emulator window looks wrong.** The emulator is an X11 program under XWayland (its bundled Qt has no Wayland plugin), and its toolbar is a second window: the two only line up when the main window floats, which the rule above does. On a scaled monitor it renders at 1x and comes out small; it ignores `QT_SCALE_FACTOR`, so resize the window and the screen scales with it.
+
+**The phone looks huge, or tiny, since I tried Display scale.** A density override is kept across reboots. Open Tweaks › Display scale and pick Default (`wm density reset`), or run `bin/omarchy-android-dev tweak density reset` from a terminal; the font scale goes back the same way with `tweak font 1.0`.
 
 **A recording was running when the shell restarted.** The device finishes the file on its own; it stays at `/sdcard/omarchy-android-dev-<stamp>.mp4` and the plugin does not pull leftovers. `adb pull` it and remove it by hand.
 

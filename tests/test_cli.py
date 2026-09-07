@@ -116,6 +116,20 @@ class Cli(FakeAdbCase):
         self.assertEqual(self.run_cli("toggles")["toggles"]["bluetooth"]["text"], "on")
         self.assertEqual(self.run_cli("toggle", "coffee")["error"]["code"], "bad_args")
 
+    def test_tweak_and_tweaks(self):
+        self.add_rules(
+            {"match": "echo api=", "stdout_file": "tweaks_read.txt"},
+            {"match": "shell cmd uimode night", "stdout": ""},
+        )
+        doc = self.run_cli("tweaks")
+        self.assertEqual(doc["tweaks"]["dark"]["text"], "off")
+        self.assertEqual(doc["tweaks"]["density"]["text"], "420 dpi")
+        self.assertEqual(self.run_cli("tweak", "dark")["notice"], "Dark mode on")
+        self.assertIn("-s emulator-5554 shell cmd uimode night yes", self.joined_calls())
+        self.assertEqual(self.run_cli("tweak", "coffee")["error"]["code"], "bad_args")
+        self.assertEqual(self.run_cli("tweak", "font", "9")["error"]["code"], "bad_args")
+        self.assertEqual(self.run_cli("tweak", "density", "10")["error"]["code"], "bad_args")
+
     def test_argument_validation_and_deeplink(self):
         self.assertEqual(self.run_cli("app", "launch", "com.foo;rm")["error"]["code"], "bad_args")
         self.assertEqual(self.run_cli("app", "dance", "com.foo")["error"]["code"], "bad_args")
@@ -162,7 +176,7 @@ class Cli(FakeAdbCase):
     def test_help_lists_every_command(self):
         doc = self.run_cli("help")
         usages = [c["usage"].split()[0] for c in doc["commands"]]
-        for name in ("status", "devices", "select", "track", "packages", "package", "app", "perms", "deeplink", "screenshot", "record", "toggles", "toggle", "apk", "text", "tools", "tool",
+        for name in ("status", "devices", "select", "track", "packages", "package", "app", "perms", "deeplink", "screenshot", "record", "toggles", "toggle", "tweaks", "tweak", "apk", "text", "tools", "tool",
                      "wireless", "pair", "connect", "disconnect", "tcpip", "usb"):
             self.assertIn(name, usages)
 

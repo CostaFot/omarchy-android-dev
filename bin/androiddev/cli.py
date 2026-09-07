@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 
-from . import PLUGIN_ID, actions, adb as adbmod, apk as apkmod, capture, devices as devmod, fmt, packages as pkgmod, plugin_version, text as textmod, toggles as togmod, tools as toolsmod, wireless as wlmod
+from . import PLUGIN_ID, actions, adb as adbmod, apk as apkmod, capture, devices as devmod, fmt, packages as pkgmod, plugin_version, text as textmod, toggles as togmod, tools as toolsmod, tweaks as twmod, wireless as wlmod
 from .adb import Adb, AdbError, PartialError
 from .state import State
 
@@ -54,6 +54,10 @@ HELP = [
     ("record", "screenrecord on the device until Ctrl-C (or its 3 min limit), then pull to the videos dir"),
     ("toggles", "the nine developer toggles with their state"),
     ("toggle NAME [on|off]", "flip (or set) animations, touches, pointer, layout, airplane, wifi, data, bluetooth, demo"),
+    ("tweaks", "dark mode, the font scale and the display density with their current values and the steps"),
+    ("tweak dark [on|off]", "flip (or set) dark mode: cmd uimode night yes|no"),
+    ("tweak font [SCALE|next]", "set the font scale (settings put system font_scale), or step to the next one"),
+    ("tweak density [DPI|reset|next]", "set the display density (wm density), reset it to the physical one, or step to the next one"),
     ("apk list [DIR]", "the .apk files in DIR (default: the apkDir setting)"),
     ("apk install PATH...", "adb install -r -t, one file after another"),
     ("text send TEXT", "type TEXT on the device (input text; one line of ASCII)"),
@@ -398,6 +402,18 @@ def cmd_toggle(ctx, args):
     return togmod.flip(adb, serial, args[0], want)
 
 
+def cmd_tweaks(ctx, args):
+    adb, serial = ctx.device()
+    return twmod.read_all(adb, serial)
+
+
+def cmd_tweak(ctx, args):
+    if len(args) not in (1, 2) or args[0] not in twmod.NAMES:
+        raise BadArgs("tweak dark [on|off] | tweak font [SCALE|next] | tweak density [DPI|reset|next]")
+    adb, serial = ctx.device()
+    return twmod.set_tweak(adb, serial, args[0], args[1] if len(args) == 2 else None)
+
+
 def _remember_apk_dirs(ctx, paths):
     """The folders an install ran from, added once it has: this run has held
     its state snapshot since it started, and an install is the one command
@@ -612,6 +628,8 @@ COMMANDS = {
     "screenshot": cmd_screenshot,
     "toggles": cmd_toggles,
     "toggle": cmd_toggle,
+    "tweaks": cmd_tweaks,
+    "tweak": cmd_tweak,
     "apk": cmd_apk,
     "text": cmd_text,
     "tools": cmd_tools,

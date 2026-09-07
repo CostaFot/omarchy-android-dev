@@ -530,7 +530,7 @@ Item {
   // The pages as a toplevel (Window.qml): the shell's panel loader owns it,
   // so opening and closing go through the shell's summon and hide, the
   // page in the payload. `window PAGE` moves an open window's page.
-  readonly property var pageNames: ["hub", "devices", "packages", "deeplink", "toggles", "capture", "apks", "text", "tools", "wireless", "settings"]
+  readonly property var pageNames: ["hub", "devices", "packages", "deeplink", "toggles", "tweaks", "capture", "apks", "text", "tools", "wireless", "settings"]
 
   function isWindowOpen() {
     if (windowHost) return windowHost.opened === true
@@ -617,7 +617,7 @@ Item {
     "omarchy-shell costafot.android-dev <verb> [args]",
     "  help                 this list",
     "  open | close | toggle  the panel, or the window with the openAsWindow setting on (show/hide are aliases)",
-    "  page NAME            open the panel on a page: hub devices packages deeplink toggles capture apks text tools wireless settings",
+    "  page NAME            open the panel on a page: hub devices packages deeplink toggles tweaks capture apks text tools wireless settings",
     "  window open|close|toggle|PAGE  the same pages as their own window (a toplevel Hyprland tiles or floats); a page name opens it there; explicit whatever the setting",
     "  status               one JSON line: adb, settings, devices, tracker, recording, pairing, the open page, the window, errors",
     "  devices              one JSON line: the attached devices",
@@ -629,6 +629,9 @@ Item {
     "  screenshot           screenshot of the selected device: file, clipboard, notification",
     "  record start|stop|toggle  screen recording of the selected device; stop pulls the mp4 to the videos folder",
     "  flip NAME            flip a developer toggle: animations touches pointer layout airplane wifi data bluetooth demo",
+    "  dark on|off|toggle   dark mode on the selected device (cmd uimode night)",
+    "  fontscale SCALE|next  the font scale (settings put system font_scale 1.15), or the next of Android's steps",
+    "  density DPI|reset|next  the display density (wm density 482), back to the physical one, or the next Display size step",
     "  text TEXT            type TEXT on the selected device (input text: one line of ASCII)",
     "  clipboard            type the clipboard (wl-paste) on the selected device",
     "  scrcpy               mirror the selected device with scrcpy",
@@ -692,6 +695,28 @@ Item {
       var n = String(name || "").trim().toLowerCase()
       if (root.toggleNames.indexOf(n) === -1) return "flip takes one of: " + root.toggleNames.join(" ")
       return root.act(["toggle", n])
+    }
+    // The three tweaks: dark mode flips like a toggle, the two scales take
+    // a value or step through Android's own stops (`next`); the helper
+    // checks the ranges and answers bad_args as a notice.
+    function dark(mode: string): string {
+      var m = String(mode || "").trim().toLowerCase()
+      if (m === "on" || m === "off") return root.act(["tweak", "dark", m])
+      if (m === "" || m === "toggle") return root.act(["tweak", "dark"])
+      return "dark takes on, off or toggle"
+    }
+    function fontscale(value: string): string {
+      var v = String(value || "").trim().toLowerCase()
+      if (v === "" || v === "next") return root.act(["tweak", "font"])
+      if (!/^\d(\.\d{1,2})?$/.test(v)) return "fontscale takes a scale such as 1.15, or next"
+      return root.act(["tweak", "font", v])
+    }
+    function density(value: string): string {
+      var v = String(value || "").trim().toLowerCase()
+      if (v === "" || v === "next") return root.act(["tweak", "density"])
+      if (v === "reset") return root.act(["tweak", "density", "reset"])
+      if (!/^\d{2,4}$/.test(v)) return "density takes a dpi such as 482, reset, or next"
+      return root.act(["tweak", "density", v])
     }
     function record(mode: string): string {
       var m = String(mode || "").trim().toLowerCase()

@@ -85,6 +85,9 @@ QtObject {
   // helper), as [{path, path_text}]: the APKs page's folder rows.
   property var recentApkDirs: []
   property var toggles: null
+  // The last `tweaks` document's `tweaks` (dark mode, the font scale and
+  // the display density with their steps); a `tweak` answer carries it too.
+  property var tweaks: null
   // The last `apk list` document (dir, exists, apks[]) and the last `tools`
   // one (what is installed, the AVDs with Running or Stopped).
   property var apkList: null
@@ -137,13 +140,14 @@ QtObject {
   function refreshPackages() { run(["packages"], null) }
   function fetchPackage(pkg) { run(["package", String(pkg)], null) }
   function refreshToggles() { run(["toggles"], null) }
+  function refreshTweaks() { run(["tweaks"], null) }
   function listApks(dir) { run(dir ? ["apk", "list", String(dir)] : ["apk", "list"], null) }
   function refreshTools() { run(["tools"], null) }
   function refreshWireless() { run(["wireless"], null) }
 
-  // The toggles were read from one device; another selection makes them
-  // stale until the page reads again.
-  onSelectedChanged: toggles = null
+  // The toggles and the tweaks were read from one device; another
+  // selection makes them stale until the page reads again.
+  onSelectedChanged: { toggles = null; tweaks = null }
 
   // The command of the run in flight ("" between runs), so a page can say
   // "Listing packages…" for its own run and not for someone else's.
@@ -185,7 +189,7 @@ QtObject {
   property bool timedOut: false
   property var pendingRuns: []
   readonly property int maxPending: 8
-  readonly property var readCommands: ["status", "devices", "packages", "package", "toggles", "tools", "wireless"]
+  readonly property var readCommands: ["status", "devices", "packages", "package", "toggles", "tweaks", "tools", "wireless"]
   property var currentRun: null
   property int runGen: 0
 
@@ -339,6 +343,7 @@ QtObject {
                        system_apps: d.system_apps === true, last_package: d.last_package || "" }
     }
     if (d.toggles && typeof d.toggles === "object") toggles = d.toggles
+    if (d.tweaks && typeof d.tweaks === "object") tweaks = d.tweaks
     if (d.command === "apk" && Array.isArray(d.apks)) apkList = d
     if (d.command === "tools" && Array.isArray(d.avds)) toolsInfo = d
     if (d.command === "wireless" && d.mdns && typeof d.mdns === "object") wirelessInfo = d

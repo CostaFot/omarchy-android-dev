@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.3
+
+The hub screenshot catches up with the pages (board issue COS-118).
+
+- `assets/screenshots/hub.png` retaken on the Medium_Phone emulator: the page list starts at *Device info* and has the *Tweaks* row, as the hub has since 1.12.0. `preview.png` recomposed from it with the actions and toggles crops unchanged.
+
 ## 1.12.2
 
 The README in a lighter register: the lead and the bar section by Costa, the rest to match.

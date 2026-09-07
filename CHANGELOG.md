@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.12.0
+
+The Device info page (board issue COS-85).
+
+- Added: a **Device info** page, first on the hub: the device at a glance, read from it in one call. The model and the device's name, the Android version with its API level, security patch and build, the battery with its level, whether and how it is charging, its temperature and health, the IPv4 address with the Wi-Fi network, signal and link speed (and the tunnel interface when a VPN is up on the phone), the screen size, density, state and brightness, the memory and storage free, the activity in the foreground and the uptime. Enter on a row copies its value to the clipboard: the IP address for an `adb connect`, the build for a bug report. `page info` and `window info` open it.
+- Added: the helper's `info`: the same nine sections as JSON, the raw values beside the formatted text.
+- Tests: 264.
+
 ## 1.11.0
 
 The keys beside the mirror (board issue COS-86).

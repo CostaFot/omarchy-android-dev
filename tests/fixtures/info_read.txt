@@ -1,0 +1,57 @@
+model=PTP-N49
+manufacturer=HONOR
+brand=HONOR
+device=HNPTPX
+name=HONOR Magic7 Pro
+abi=arm64-v8a
+api=36
+release=16
+patch=2026-07-01
+build=PTP-N49 10.0.0.161(C431E7R4P2)
+type=user
+brightness=14
+brightness_mode=1
+uptime=257684.49 750334.65
+screen= mScreenState=ON
+focus= mCurrentFocus=null
+top= topResumedActivity=ActivityRecord{5248827 u0 com.brave.browser/com.google.android.apps.chrome.Main t14711}
+## battery
+Current Battery Service state:
+  AC powered: true
+  USB powered: true
+  Wireless powered: false
+  Dock powered: false
+  Max charging current: 2000000
+ Time when the latest updated value of the Max charging current was sent via battery changed broadcast: +2d23h9m39s361ms
+  Max charging voltage: 5000000
+  Charge counter: 4382
+  status: 2
+  health: 2
+  present: true
+  level: 86
+  scale: 100
+  voltage: 4399
+ Time when the latest updated value of the voltage was sent via battery changed broadcast: +2d23h34m18s216ms
+ The last voltage value sent via the battery changed broadcast: 4393
+  temperature: 410
+  technology: Li-ion
+  Charging state: 0
+  Charging policy: 0
+  Capacity level: 3
+## meminfo
+MemTotal:       11503124 kB
+MemAvailable:    2953524 kB
+## df
+Filesystem       1K-blocks     Used Available Use% Mounted on
+/dev/block/dm-31 476311552 86925352 389255128  19% /data/user/0
+## wm
+Physical size: 1280x2800
+Physical density: 560
+## ip
+24: wlan0    inet 192.168.1.3/24 brd 192.168.1.255 scope global dynamic wlan0\       valid_lft 83126sec preferred_lft 83126sec
+30: tun0    inet 10.5.0.2/16 scope global tun0\       valid_lft forever preferred_lft forever
+## wifi
+Wifi is enabled
+WifiInfo: SSID: "CoffeeShop", BSSID: 00:11:22:33:44:55, MAC: 02:00:00:aa:bb:cc, IP: /192.168.1.3, Security type: 2, Supplicant state: COMPLETED, Wi-Fi standard: 11ax, RSSI: -45, Link speed: 1080Mbps, Tx Link speed: 1080Mbps, Max Supported Tx Link speed: 1200Mbps, Calculated Tx : 833Mbps, Rx Link speed: 1200Mbps, Max Supported Rx Link speed: 1200Mbps, Calculated Rx : 1129Mbps, Frequency: 5260MHz, Net ID: 10, Metered hint: false, score: 60, isUsable: true, CarrierMerged: false, SubscriptionId: -1, IsPrimary: 1, Trusted: true, Restricted: false, Ephemeral: false, OEM paid: false, OEM private: false, OSU AP: false, FQDN: <none>, Provider friendly name: <none>, Requesting package name: <none>"CoffeeShop"wpa2-pskMLO Information: , Is TID-To-Link negotiation supported by the AP: false, AP MLD Address: <none>, AP MLO Link Id: <none>, AP MLO Affiliated links: <none>, Vendor Data: <none>
+mWifiInfo SSID: "CoffeeShop", BSSID: 00:11:22:33:44:55, MAC: 02:00:00:aa:bb:cc, IP: /192.168.1.3, Security type: 2, Supplicant state: COMPLETED, Wi-Fi standard: 11ax, RSSI: -45, Link speed: 1080Mbps, Tx Link speed: 1080Mbps, Max Supported Tx Link speed: 1200Mbps, Calculated Tx : 884Mbps, Rx Link speed: 1200Mbps, Max Supported Rx Link speed: 1200Mbps, Calculated Rx : 1129Mbps, Frequency: 5260MHz, Net ID: 10, Metered hint: false, score: 60, isUsable: true, CarrierMerged: false, SubscriptionId: -1, IsPrimary: 1, Trusted: true, Restricted: false, Ephemeral: false, OEM paid: false, OEM private: false, OSU AP: false, FQDN: <none>, Provider friendly name: <none>, Requesting package name: <none>"CoffeeShop"wpa2-pskMLO Information: , Is TID-To-Link negotiation supported by the AP: false, AP MLD Address: <none>, AP MLO Link Id: <none>, AP MLO Affiliated links: <none>, Vendor Data: <none>
+## end

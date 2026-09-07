@@ -2,7 +2,7 @@
 
 <img src="preview.png" width="900" alt="the droid in the bar, the hub, a package's actions and the developer toggles">
 
-The Android developer's side of a device, on the [Omarchy](https://omarchy.org) bar: pick a device, pick a package, clear its data, force-stop it, fire a deep link, flip the developer toggles, take a screenshot, record the screen, install an APK, type into a field, start an emulator, mirror with scrcpy and press the phone's keys beside the mirror, follow logcat, pair a phone over Wi-Fi and lose the cable. No terminal, no Android Studio.
+The Android developer's side of a device, on the [Omarchy](https://omarchy.org) bar: pick a device, see its battery, network and screen at a glance, pick a package, clear its data, force-stop it, fire a deep link, flip the developer toggles, take a screenshot, record the screen, install an APK, type into a field, start an emulator, mirror with scrcpy and press the phone's keys beside the mirror, follow logcat, pair a phone over Wi-Fi and lose the cable. No terminal, no Android Studio.
 
 Started as a port of the Windows [ADB Extension for Command Palette](https://github.com/CostaFot/AdbExtension), the same way [Markets](https://github.com/CostaFot/omarchy-markets) was a port of the Markets extension, and grew into a device hub.
 
@@ -34,6 +34,10 @@ A notification says when a device connects, disconnects or needs authorising (ac
 It opens on a hub: the selected device with its state, then the pages, and a last row, *Open as a window*, that closes the popup and opens the same pages as a window. Every page hangs off that device. `j`/`k` or the arrows move, Enter runs, `r` reads the page again, Escape or Backspace goes back a page and Escape on the hub closes. Pages with a box (a filter, a URL, a folder, a line of text) start typing at once; `/` puts the caret back in the box.
 
 **Devices** is the picker: every device adb sees, with its kind (USB, emulator, Wi-Fi) and state, the selected one checked. Enter selects the one the other pages talk to. With one device there is nothing to pick and the plugin uses it.
+
+<img src="assets/screenshots/info.png" width="300" alt="the device info page: model, Android version, battery, network, screen, memory, storage, foreground activity, uptime">
+
+**Device info** is the device at a glance, read in one call: the model and the name it goes by, the Android version with its API level, security patch and build, the battery with how it is charging and how warm it is, the IPv4 address with the Wi-Fi network and signal, the screen size, density, state and brightness, the memory and storage free, the activity in the foreground and the uptime. Enter on a row copies its value to the clipboard: the IP address for an `adb connect` from a terminal, the build for a bug report.
 
 <p>
 <img src="assets/screenshots/apps.png" width="300" alt="the package list with its sections">
@@ -135,7 +139,7 @@ omarchy-shell costafot.android-dev toggle        # the hub (the window instead, 
 omarchy-shell costafot.android-dev status | jq   # adb, devices, the tracker, the settings in force
 omarchy-shell costafot.android-dev screenshot    # saved, on the clipboard, with a notification
 omarchy-shell costafot.android-dev select emulator-5554
-omarchy-shell costafot.android-dev page packages # open the panel on a page: hub, devices, packages, deeplink, toggles, tweaks, capture, apks, text, tools, wireless, settings
+omarchy-shell costafot.android-dev page packages # open the panel on a page: hub, devices, info, packages, deeplink, toggles, tweaks, capture, apks, text, tools, wireless, settings
 omarchy-shell costafot.android-dev window toggle # the same pages as their own window; open, close, or a page name (window toggles) work too
 omarchy-shell costafot.android-dev launch com.android.chrome   # forcestop and clear take a package too
 omarchy-shell costafot.android-dev deeplink https://example.com
@@ -200,6 +204,7 @@ Every command answers with one line of JSON. Errors ride inside it; the exit cod
 ```bash
 bin/omarchy-android-dev status | jq '{adb, selected, tools}'
 bin/omarchy-android-dev devices | jq '.devices[] | [.serial, .state, .label]'
+bin/omarchy-android-dev info | jq '.info | map_values(.text)'         # the device at a glance: model, Android, battery, network, screen, memory, storage, foreground, uptime
 bin/omarchy-android-dev packages | jq '.packages[] | [.name, .section, .detail]'
 bin/omarchy-android-dev package com.android.chrome | jq '{launcher_activity, launcher_activities, runtime_permissions}'   # app launch PKG ACTIVITY starts one of them and remembers it
 bin/omarchy-android-dev app launch com.android.chrome | jq .notice       # restart, force-stop, kill, clear, clear-restart, uninstall

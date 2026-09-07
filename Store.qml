@@ -91,6 +91,9 @@ QtObject {
   // The last `tweaks` document's `tweaks` (dark mode, the font scale and
   // the display density with their steps); a `tweak` answer carries it too.
   property var tweaks: null
+  // The last `info` document's `info` (the device at a glance: nine
+  // sections, each with the row's text and detail formatted by the helper).
+  property var deviceInfo: null
   // The last `apk list` document (dir, exists, apks[]) and the last `tools`
   // one (what is installed, the AVDs with Running or Stopped).
   property var apkList: null
@@ -144,13 +147,14 @@ QtObject {
   function fetchPackage(pkg) { run(["package", String(pkg)], null) }
   function refreshToggles() { run(["toggles"], null) }
   function refreshTweaks() { run(["tweaks"], null) }
+  function refreshInfo() { run(["info"], null) }
   function listApks(dir) { run(dir ? ["apk", "list", String(dir)] : ["apk", "list"], null) }
   function refreshTools() { run(["tools"], null) }
   function refreshWireless() { run(["wireless"], null) }
 
-  // The toggles and the tweaks were read from one device; another
-  // selection makes them stale until the page reads again.
-  onSelectedChanged: { toggles = null; tweaks = null }
+  // The toggles, the tweaks and the device info were read from one
+  // device; another selection makes them stale until the page reads again.
+  onSelectedChanged: { toggles = null; tweaks = null; deviceInfo = null }
 
   // The command of the run in flight ("" between runs), so a page can say
   // "Listing packages…" for its own run and not for someone else's.
@@ -192,7 +196,7 @@ QtObject {
   property bool timedOut: false
   property var pendingRuns: []
   readonly property int maxPending: 8
-  readonly property var readCommands: ["status", "devices", "packages", "package", "toggles", "tweaks", "tools", "wireless"]
+  readonly property var readCommands: ["status", "devices", "info", "packages", "package", "toggles", "tweaks", "tools", "wireless"]
   property var currentRun: null
   property int runGen: 0
 
@@ -347,6 +351,7 @@ QtObject {
     }
     if (d.toggles && typeof d.toggles === "object") toggles = d.toggles
     if (d.tweaks && typeof d.tweaks === "object") tweaks = d.tweaks
+    if (d.command === "info" && d.info && typeof d.info === "object") deviceInfo = d.info
     if (d.command === "apk" && Array.isArray(d.apks)) apkList = d
     if (d.command === "tools" && Array.isArray(d.avds)) toolsInfo = d
     if (d.command === "wireless" && d.mdns && typeof d.mdns === "object") wirelessInfo = d

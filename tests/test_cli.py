@@ -176,7 +176,7 @@ class Cli(FakeAdbCase):
     def test_help_lists_every_command(self):
         doc = self.run_cli("help")
         usages = [c["usage"].split()[0] for c in doc["commands"]]
-        for name in ("status", "devices", "select", "track", "packages", "package", "app", "perms", "deeplink", "screenshot", "record", "toggles", "toggle", "tweaks", "tweak", "apk", "text", "tools", "tool",
+        for name in ("status", "devices", "select", "info", "track", "packages", "package", "app", "perms", "deeplink", "screenshot", "record", "toggles", "toggle", "tweaks", "tweak", "apk", "text", "tools", "tool",
                      "wireless", "pair", "connect", "disconnect", "tcpip", "usb"):
             self.assertIn(name, usages)
 

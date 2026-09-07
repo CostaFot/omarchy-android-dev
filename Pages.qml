@@ -4,8 +4,8 @@ import qs.Commons
 import qs.Ui
 
 // The Android Dev pages: the hub with the selected device and the pages
-// hanging off it (Devices, Apps and a package's actions, Deep link,
-// Toggles, Capture, APKs, Send text, Tools, Wireless and its two
+// hanging off it (Devices, Device info, Apps and a package's actions,
+// Deep link, Toggles, Tweaks, Capture, APKs, Send text, Tools, Wireless and its two
 // sub-pages, Settings). One component, shown by two hosts: the bar popup
 // (Panel.qml, the kit's KeyboardPanel under the droid glyph) and the
 // window (Window.qml, a FloatingWindow that Hyprland tiles or floats like
@@ -63,6 +63,7 @@ FocusScope {
     else if (page === "actions") store.fetchPackage(current.pkg)
     else if (page === "toggles") store.refreshToggles()
     else if (page === "tweaks" || page === "fontpick" || page === "densitypick") store.refreshTweaks()
+    else if (page === "info") store.refreshInfo()
     else if (page === "apks") { resetInstalls(); listApks() }
     else if (page === "tools") store.refreshTools()
     else if (page === "wireless" || (page === "paircode" && !current.addr)) store.refreshWireless()
@@ -82,13 +83,13 @@ FocusScope {
   readonly property bool isSettingsForm: page === "settings"
 
   readonly property var pageTitles: ({
-    hub: "Android Dev", devices: "Devices", packages: "Apps", actions: "", deeplink: "Deep link", toggles: "Toggles",
+    hub: "Android Dev", devices: "Devices", info: "Device info", packages: "Apps", actions: "", deeplink: "Deep link", toggles: "Toggles",
     tweaks: "Tweaks", fontpick: "Font scale", densitypick: "Display scale",
     capture: "Capture", apks: "APKs", text: "Send text", tools: "Tools", wireless: "Wireless",
     paircode: "Pair with a code", settings: "Settings", avdboot: "", launchpick: ""
   })
   // Pages the IPC `page` verb may open straight onto.
-  readonly property var ipcPages: ["hub", "devices", "packages", "deeplink", "toggles", "tweaks", "capture", "apks", "text", "tools", "wireless", "settings"]
+  readonly property var ipcPages: ["hub", "devices", "info", "packages", "deeplink", "toggles", "tweaks", "capture", "apks", "text", "tools", "wireless", "settings"]
 
   function push(entry) {
     var top = Object.assign({}, current, { cursor: selectedIndex, query: filterField.text })
@@ -136,6 +137,7 @@ FocusScope {
       else if (entry.page === "actions" && entry.pkg) store.fetchPackage(entry.pkg)
       else if (entry.page === "toggles") store.refreshToggles()
       else if (entry.page === "tweaks") store.refreshTweaks()
+      else if (entry.page === "info") store.refreshInfo()
       else if (entry.page === "apks") { resetInstalls(); listApks() }
       else if (entry.page === "tools") store.refreshTools()
       else if (entry.page === "wireless" || (entry.page === "paircode" && !entry.addr)) store.refreshWireless()
@@ -175,6 +177,7 @@ FocusScope {
     var body
     if (page === "hub") body = hubRows()
     else if (page === "devices") body = deviceRows()
+    else if (page === "info") body = infoRows()
     else if (page === "packages") body = packageRows()
     else if (page === "actions") body = actionRows()
     else if (page === "deeplink") body = deeplinkRows()
@@ -203,6 +206,7 @@ FocusScope {
 
   // The hub's page rows.
   readonly property var pageRows: [
+    { icon: "\uf05a", label: "Device info", detail: "Android version, battery, network, screen, memory, storage", page: "info" },
     { icon: "\uf00a", label: "Apps", detail: "Packages, their actions and deep links", page: "packages" },
     { icon: "\uf0c1", label: "Deep link", detail: "Open a URL on the device", page: "deeplink" },
     { icon: "\uf1de", label: "Toggles", detail: "Animations, touches, layout bounds, airplane, Wi-Fi, data, Bluetooth, demo mode", page: "toggles" },
@@ -514,6 +518,43 @@ FocusScope {
       var icon = v.on === true ? "\uf205" : v.on === false ? "\uf204" : "\uf128"
       out.push({ type: "action", icon: icon, label: v.label || name, detail: (v.text || "unknown") + " · " + toggleCommands[name],
                  action: "toggle", name: name })
+    }
+    return out
+  }
+
+  // ---- Device info ------------------------------------------------------------
+  // One row per section of the helper's `info` document, in the helper's
+  // order (`infoOrder` is pinned to `info.SECTIONS`): the value as the
+  // label, the section's name and extras as the detail, both formatted by
+  // the helper; Enter copies the value through the service.
+  readonly property var infoOrder: ["device", "android", "battery", "network", "screen", "memory", "storage", "foreground", "uptime"]
+  // nf-fa mobile, android, wifi, desktop, microchip, hdd_o, window_maximize, clock_o, as escapes.
+  readonly property var infoGlyphs: ({ device: "\uf10b", android: "\uf17b", network: "\uf1eb", screen: "\uf108", memory: "\uf2db",
+                                       storage: "\uf0a0", foreground: "\uf2d0", uptime: "\uf017" })
+
+  // nf-fa battery_4 down to battery_0, by level.
+  function batteryGlyph(level) {
+    if (typeof level !== "number") return "\uf244"
+    return level > 87 ? "\uf240" : level > 62 ? "\uf241" : level > 37 ? "\uf242" : level > 12 ? "\uf243" : "\uf244"
+  }
+
+  function infoRows() {
+    var s = root.store
+    var out = []
+    if (!deviceGate(out)) return out
+    var info = s.deviceInfo
+    if (!info) {
+      out.push({ type: "note", label: s.busy && s.runningCommand === "info" ? "Reading the device…" : "Press r to read the device" })
+      return out
+    }
+    for (var i = 0; i < infoOrder.length; i++) {
+      var name = infoOrder[i]
+      var v = info[name]
+      if (!v) continue
+      var low = name === "battery" && typeof v.level === "number" && v.level <= 12
+      out.push({ type: "action", icon: name === "battery" ? batteryGlyph(v.level) : infoGlyphs[name],
+                 label: v.text || "unknown", detail: v.detail || v.label || name,
+                 action: "copyinfo", value: v.copy || v.text || "", urgent: low })
     }
     return out
   }
@@ -942,6 +983,7 @@ FocusScope {
   function keyHint() {
     if (page === "hub") return "j/k move · Enter opens · r refreshes · Esc closes"
     if (page === "devices") return "j/k move · Enter selects · r refreshes · Esc back"
+    if (page === "info") return "j/k move · Enter copies the value · r reads again · Esc back"
     if (page === "packages") return "Type to filter · ↑/↓ move · Enter opens · r lists again · Esc back"
     if (page === "actions") return "j/k move · Enter runs it · Esc back"
     if (page === "deeplink") return "Type a URL, Enter launches · ↑/↓ recent · Esc back"
@@ -1246,6 +1288,7 @@ FocusScope {
     if (row.type === "title") { pop(); return }
     if (row.type !== "action") return
     if (row.action === "refresh") refresh()
+    else if (row.action === "copyinfo") { if (service && typeof service.copyText === "function") service.copyText(row.value) }
     else if (row.action === "pairqr") { if (service && typeof service.startPairing === "function") service.startPairing() }
     else if (row.action === "pairstop") { if (service && typeof service.stopPairing === "function") service.stopPairing() }
     else if (row.action === "pairaddr") {

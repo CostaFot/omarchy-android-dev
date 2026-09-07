@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 
-from . import PLUGIN_ID, actions, adb as adbmod, apk as apkmod, capture, devices as devmod, fmt, keys as keysmod, packages as pkgmod, plugin_version, text as textmod, toggles as togmod, tools as toolsmod, tweaks as twmod, wireless as wlmod
+from . import PLUGIN_ID, actions, adb as adbmod, apk as apkmod, capture, devices as devmod, fmt, info as infomod, keys as keysmod, packages as pkgmod, plugin_version, text as textmod, toggles as togmod, tools as toolsmod, tweaks as twmod, wireless as wlmod
 from .adb import Adb, AdbError, PartialError
 from .state import State
 
@@ -45,6 +45,7 @@ HELP = [
     ("status", "adb path and source, devices, selected device, last package, recent deep links, recent APK folders, tools, versions"),
     ("devices", "attached devices with labels; the selected one marked"),
     ("select SERIAL", "remember SERIAL as the selected device"),
+    ("info", "the device at a glance: model, Android version, battery, network (IP, Wi-Fi, signal), screen, memory, storage, the foreground activity, uptime; one adb shell"),
     ("track", "stream one JSON line per device change (adb track-devices)"),
     ("packages", "installed packages: Foreground, Running, Debuggable, Other"),
     ("package PKG", "version, debuggable, the launcher activities (and which one Launch starts), runtime permissions"),
@@ -298,6 +299,13 @@ def cmd_select(ctx, args):
     devmod.mark_selected(devices, serial)
     label = next((d["label"] for d in devices if d["serial"] == serial), serial)
     return {"devices": devices, "selected": serial, "notice": f"Selected {label}"}
+
+
+def cmd_info(ctx, args):
+    if args:
+        raise BadArgs("info")
+    adb, serial = ctx.device()
+    return infomod.read_all(adb, serial)
 
 
 def cmd_packages(ctx, args):
@@ -629,6 +637,7 @@ COMMANDS = {
     "status": cmd_status,
     "devices": cmd_devices,
     "select": cmd_select,
+    "info": cmd_info,
     "packages": cmd_packages,
     "package": cmd_package,
     "app": cmd_app,

@@ -446,6 +446,18 @@ Item {
   // `silent` skips the notification (the APK page's Install all sends one
   // summary instead of one per file). `stdinText` reaches the helper's
   // stdin (the pairing code).
+  // A value off the Device info page onto the clipboard (the IP address
+  // for an adb connect, the build for a bug report): wl-copy as argv, the
+  // kit's panels do the same through a shell string. The notice is a
+  // literal; the value itself is never built into a string here.
+  function copyText(text) {
+    var t = String(text || "")
+    if (t === "") return "nothing to copy"
+    Quickshell.execDetached(["wl-copy", "--", t])
+    store.showNotice("Copied to the clipboard", false)
+    return "copied"
+  }
+
   function act(args, onDone, silent, stdinText) {
     store.run(args, function(doc) {
       if (args[0] !== "screenshot" && store.notifyEnabled && silent !== true) {
@@ -558,7 +570,7 @@ Item {
   // The pages as a toplevel (Window.qml): the shell's panel loader owns it,
   // so opening and closing go through the shell's summon and hide, the
   // page in the payload. `window PAGE` moves an open window's page.
-  readonly property var pageNames: ["hub", "devices", "packages", "deeplink", "toggles", "tweaks", "capture", "apks", "text", "tools", "wireless", "settings"]
+  readonly property var pageNames: ["hub", "devices", "info", "packages", "deeplink", "toggles", "tweaks", "capture", "apks", "text", "tools", "wireless", "settings"]
 
   function isWindowOpen() {
     if (windowHost) return windowHost.opened === true
@@ -646,7 +658,7 @@ Item {
     "omarchy-shell costafot.android-dev <verb> [args]",
     "  help                 this list",
     "  open | close | toggle  the panel, or the window with the openAsWindow setting on (show/hide are aliases)",
-    "  page NAME            open the panel on a page: hub devices packages deeplink toggles tweaks capture apks text tools wireless settings",
+    "  page NAME            open the panel on a page: hub devices info packages deeplink toggles tweaks capture apks text tools wireless settings",
     "  window open|close|toggle|PAGE  the same pages as their own window (a toplevel Hyprland tiles or floats); a page name opens it there; explicit whatever the setting",
     "  status               one JSON line: adb, settings, devices, tracker, recording, pairing, the open page, the window, the mirror, errors",
     "  devices              one JSON line: the attached devices",

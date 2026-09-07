@@ -219,6 +219,29 @@ class ManifestMatchesTheQml(unittest.TestCase):
         self.assertIn("--window-title", read("bin/androiddev/tools.py"))
         self.assertIn('id: mirrorKeysToggle', self.panel)
 
+    def test_the_device_info_page_is_wired(self):
+        # 1.12.0: the Device info page is an IPC page (`page info`, `window
+        # info`), first on the hub; its rows are the helper's `info`
+        # sections in the helper's order, the store reads `info` like the
+        # toggles, and Enter copies a value through the service (wl-copy as
+        # argv, a literal notice).
+        from androiddev import info
+        pages = js_literal(self.panel, "ipcPages", "]")
+        self.assertIn("info", pages)
+        self.assertEqual(js_literal(self.service, "pageNames", "]"), pages)
+        self.assertIn('page: "info"', self.panel)
+        self.assertEqual(js_literal(self.panel, "infoOrder", "]"), list(info.SECTIONS))
+        self.assertEqual(sorted(js_literal(self.panel, "infoGlyphs", "}")), sorted(s for s in info.SECTIONS if s != "battery"))
+        self.assertIn('action: "copyinfo"', self.panel)
+        self.assertIn("service.copyText(row.value)", self.panel)
+        self.assertIn("function refreshInfo()", self.store)
+        self.assertIn("info", js_literal(self.store, "readCommands", "]"))
+        self.assertIn("deviceInfo = d.info", self.store)
+        self.assertIn("deviceInfo = null", self.store)
+        self.assertIn("function copyText(text)", self.service)
+        self.assertIn('Quickshell.execDetached(["wl-copy", "--", t])', self.service)
+        self.assertNotIn("wl-copy", self.panel)
+
     def test_help_names_every_setting(self):
         for key in SETTING_DEFAULTS:
             self.assertIn(key, self.service, key)

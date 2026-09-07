@@ -960,7 +960,7 @@ FocusScope {
   }
 
   // ---- Settings -----------------------------------------------------------
-  // The nine settings live inline on the plugin's shell.json entry. The
+  // The twelve settings live inline on the plugin's shell.json entry. The
   // form edits copies (the fields' text, `pending*` for the toggles) and
   // Save writes the keys that changed in one `updateEntryInline`, which
   // the shell patches into the running widget in place (no remount, the
@@ -970,11 +970,12 @@ FocusScope {
   // cheaply (tests/test_manifest.py pins the copies together, with the
   // helper's and the store's key lists).
   readonly property var settingsDefaults: ({ adbPath: "", screenshotDir: "", recordingDir: "", apkDir: "~/Downloads", scrcpyArgs: "",
-                                             mirrorScreenOff: false, notify: true, deviceNotifications: true, confirmUninstall: true, showSystemApps: false,
-                                             openAsWindow: false })
+                                             mirrorScreenOff: false, mirrorKeys: true, notify: true, deviceNotifications: true, confirmUninstall: true,
+                                             showSystemApps: false, openAsWindow: false })
   readonly property var settingsTextKeys: ["adbPath", "screenshotDir", "recordingDir", "apkDir", "scrcpyArgs"]
-  readonly property var settingsBoolKeys: ["mirrorScreenOff", "notify", "deviceNotifications", "confirmUninstall", "showSystemApps", "openAsWindow"]
+  readonly property var settingsBoolKeys: ["mirrorScreenOff", "mirrorKeys", "notify", "deviceNotifications", "confirmUninstall", "showSystemApps", "openAsWindow"]
   property bool pendingMirrorScreenOff: false
+  property bool pendingMirrorKeys: true
   property bool pendingNotify: true
   property bool pendingDeviceNotifications: true
   property bool pendingConfirmUninstall: true
@@ -993,11 +994,11 @@ FocusScope {
   function settingFlag(key) { return store ? store.flag(key, settingsDefaults[key]) : settingsDefaults[key] }
 
   readonly property var formFields: [adbPathField, screenshotDirField, recordingDirField, apkDirField, scrcpyArgsField]
-  readonly property var formToggles: [mirrorScreenOffToggle, notifyToggle, deviceNotificationsToggle, confirmUninstallToggle, showSystemAppsToggle, openAsWindowToggle]
+  readonly property var formToggles: [mirrorScreenOffToggle, mirrorKeysToggle, notifyToggle, deviceNotificationsToggle, confirmUninstallToggle, showSystemAppsToggle, openAsWindowToggle]
   readonly property var formControls: formFields.concat(formToggles).concat([saveButton, cancelButton])
 
   function pendingFlag(key) {
-    return key === "mirrorScreenOff" ? pendingMirrorScreenOff : key === "notify" ? pendingNotify
+    return key === "mirrorScreenOff" ? pendingMirrorScreenOff : key === "mirrorKeys" ? pendingMirrorKeys : key === "notify" ? pendingNotify
       : key === "deviceNotifications" ? pendingDeviceNotifications
       : key === "confirmUninstall" ? pendingConfirmUninstall
       : key === "showSystemApps" ? pendingShowSystemApps : pendingOpenAsWindow
@@ -1005,6 +1006,7 @@ FocusScope {
 
   function setPendingFlag(key, value) {
     if (key === "mirrorScreenOff") pendingMirrorScreenOff = value
+    else if (key === "mirrorKeys") pendingMirrorKeys = value
     else if (key === "notify") pendingNotify = value
     else if (key === "deviceNotifications") pendingDeviceNotifications = value
     else if (key === "confirmUninstall") pendingConfirmUninstall = value
@@ -1915,6 +1917,20 @@ FocusScope {
         }
 
         Toggle {
+          id: mirrorKeysToggle
+          width: parent.width
+          label: "Keys beside the mirror"
+          description: "A strip of the phone's keys (Back, Home, Recents, the volume, Power, Screenshot, Record) next to the scrcpy window, following it around."
+          checked: root.pendingMirrorKeys
+          foreground: root.contentForeground
+          fontFamily: root.contentFontFamily
+          activeFocusOnTab: false
+          hasCursor: root.formCursor === 6
+          onHovered: function(on) { if (on) root.formCursor = 6 }
+          onClicked: { root.formCursor = 6; root.pendingMirrorKeys = !root.pendingMirrorKeys }
+        }
+
+        Toggle {
           id: notifyToggle
           width: parent.width
           label: "Notifications"
@@ -1923,9 +1939,9 @@ FocusScope {
           foreground: root.contentForeground
           fontFamily: root.contentFontFamily
           activeFocusOnTab: false
-          hasCursor: root.formCursor === 6
-          onHovered: function(on) { if (on) root.formCursor = 6 }
-          onClicked: { root.formCursor = 6; root.pendingNotify = !root.pendingNotify }
+          hasCursor: root.formCursor === 7
+          onHovered: function(on) { if (on) root.formCursor = 7 }
+          onClicked: { root.formCursor = 7; root.pendingNotify = !root.pendingNotify }
         }
 
         Toggle {
@@ -1937,9 +1953,9 @@ FocusScope {
           foreground: root.contentForeground
           fontFamily: root.contentFontFamily
           activeFocusOnTab: false
-          hasCursor: root.formCursor === 7
-          onHovered: function(on) { if (on) root.formCursor = 7 }
-          onClicked: { root.formCursor = 7; root.pendingDeviceNotifications = !root.pendingDeviceNotifications }
+          hasCursor: root.formCursor === 8
+          onHovered: function(on) { if (on) root.formCursor = 8 }
+          onClicked: { root.formCursor = 8; root.pendingDeviceNotifications = !root.pendingDeviceNotifications }
         }
 
         Toggle {
@@ -1951,9 +1967,9 @@ FocusScope {
           foreground: root.contentForeground
           fontFamily: root.contentFontFamily
           activeFocusOnTab: false
-          hasCursor: root.formCursor === 8
-          onHovered: function(on) { if (on) root.formCursor = 8 }
-          onClicked: { root.formCursor = 8; root.pendingConfirmUninstall = !root.pendingConfirmUninstall }
+          hasCursor: root.formCursor === 9
+          onHovered: function(on) { if (on) root.formCursor = 9 }
+          onClicked: { root.formCursor = 9; root.pendingConfirmUninstall = !root.pendingConfirmUninstall }
         }
 
         Toggle {
@@ -1965,9 +1981,9 @@ FocusScope {
           foreground: root.contentForeground
           fontFamily: root.contentFontFamily
           activeFocusOnTab: false
-          hasCursor: root.formCursor === 9
-          onHovered: function(on) { if (on) root.formCursor = 9 }
-          onClicked: { root.formCursor = 9; root.pendingShowSystemApps = !root.pendingShowSystemApps }
+          hasCursor: root.formCursor === 10
+          onHovered: function(on) { if (on) root.formCursor = 10 }
+          onClicked: { root.formCursor = 10; root.pendingShowSystemApps = !root.pendingShowSystemApps }
         }
 
         Toggle {
@@ -1979,9 +1995,9 @@ FocusScope {
           foreground: root.contentForeground
           fontFamily: root.contentFontFamily
           activeFocusOnTab: false
-          hasCursor: root.formCursor === 10
-          onHovered: function(on) { if (on) root.formCursor = 10 }
-          onClicked: { root.formCursor = 10; root.pendingOpenAsWindow = !root.pendingOpenAsWindow }
+          hasCursor: root.formCursor === 11
+          onHovered: function(on) { if (on) root.formCursor = 11 }
+          onClicked: { root.formCursor = 11; root.pendingOpenAsWindow = !root.pendingOpenAsWindow }
         }
       }
     }
@@ -2012,8 +2028,8 @@ FocusScope {
           bordered: true
           foreground: root.contentForeground
           fontFamily: root.contentFontFamily
-          hasCursor: root.formCursor === 11
-          onHovered: function(on) { if (on) root.formCursor = 11 }
+          hasCursor: root.formCursor === 12
+          onHovered: function(on) { if (on) root.formCursor = 12 }
           onClicked: root.saveSettings()
         }
 
@@ -2022,8 +2038,8 @@ FocusScope {
           text: "Cancel"
           foreground: root.mutedForeground
           fontFamily: root.contentFontFamily
-          hasCursor: root.formCursor === 12
-          onHovered: function(on) { if (on) root.formCursor = 12 }
+          hasCursor: root.formCursor === 13
+          onHovered: function(on) { if (on) root.formCursor = 13 }
           onClicked: root.pop()
         }
       }

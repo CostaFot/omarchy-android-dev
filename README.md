@@ -2,7 +2,7 @@
 
 <img src="preview.png" width="900" alt="the droid in the bar, the hub, a package's actions and the developer toggles">
 
-The Android developer's side of a device, on the [Omarchy](https://omarchy.org) bar: pick a device, pick a package, clear its data, force-stop it, fire a deep link, flip the developer toggles, take a screenshot, record the screen, install an APK, type into a field, start an emulator, mirror with scrcpy, follow logcat, pair a phone over Wi-Fi and lose the cable. No terminal, no Android Studio.
+The Android developer's side of a device, on the [Omarchy](https://omarchy.org) bar: pick a device, pick a package, clear its data, force-stop it, fire a deep link, flip the developer toggles, take a screenshot, record the screen, install an APK, type into a field, start an emulator, mirror with scrcpy and press the phone's keys beside the mirror, follow logcat, pair a phone over Wi-Fi and lose the cable. No terminal, no Android Studio.
 
 Started as a port of the Windows [ADB Extension for Command Palette](https://github.com/CostaFot/AdbExtension), the same way [Markets](https://github.com/CostaFot/omarchy-markets) was a port of the Markets extension, and grew into a device hub.
 
@@ -77,7 +77,11 @@ It opens on a hub: the selected device with its state, then the pages, and a las
 
 <img src="assets/screenshots/tools.png" width="300" alt="the tools page: scrcpy, logcat and the emulators">
 
-**Tools** has *Mirror with scrcpy* (once scrcpy is installed; with *Mirror with the screen off* on, the phone's own screen goes dark and stays awake while the mirror runs, and the *Extra scrcpy arguments* setting is appended; the row says whether it mirrors over USB or over Wi-Fi), *Logcat* for the package you last opened (`adb logcat --pid=…` in your default terminal; the app has to be running), and one row per emulator AVD showing Running or Stopped: Enter on a stopped one asks for a *Quick boot* (the saved snapshot, the emulator's default) or a *Cold boot* (`-no-snapshot-load`, the way out of a snapshot that misbehaves) and starts it; Enter on a running one stops it after a confirm. What this page launches is yours to close; the plugin never kills it.
+**Tools** has *Mirror with scrcpy* (once scrcpy is installed; with *Mirror with the screen off* on, the phone's own screen goes dark and stays awake while the mirror runs, and the *Extra scrcpy arguments* setting is appended; the row says whether it mirrors over USB or over Wi-Fi; the strip of keys below appears beside the window), *Logcat* for the package you last opened (`adb logcat --pid=…` in your default terminal; the app has to be running), and one row per emulator AVD showing Running or Stopped: Enter on a stopped one asks for a *Quick boot* (the saved snapshot, the emulator's default) or a *Cold boot* (`-no-snapshot-load`, the way out of a snapshot that misbehaves) and starts it; Enter on a running one stops it after a confirm. What this page launches is yours to close; the plugin never kills it.
+
+<img src="assets/screenshots/mirror-keys.png" width="320" alt="the strip of keys along the scrcpy window's right edge">
+
+**The keys beside the mirror.** While a scrcpy window is up, a strip of the phone's keys sits along its right edge and follows it around: Back, Home, Recents, Volume up, Volume down, Power, then Screenshot and Record (red while a recording runs). scrcpy has these as Mod shortcuts and shows nothing on screen; the strip is a click each, and it never takes keyboard focus, so typing into the mirror keeps working. It goes with the mirror when the window closes or its workspace is switched away, sits on the left edge when the right one runs off the monitor, and steps aside for a fullscreen mirror. The keys go to the selected device, the one *Mirror with scrcpy* started for. The *Keys beside the mirror* setting turns it off.
 
 <p>
 <img src="assets/screenshots/wireless.png" width="300" alt="the wireless page: the two ways to pair, the Wi-Fi devices, the phones seen on the network">
@@ -88,7 +92,7 @@ It opens on a hub: the selected device with its state, then the pages, and a las
 
 <img src="assets/screenshots/settings.png" width="300" alt="the settings form">
 
-**Settings** is a form: the adb binary, the screenshot, recording and APK folders, the extra scrcpy arguments, and the six switches (mirror with the screen off, notifications, device notifications, confirm uninstall, show system apps, open as a window). Tab, `j`/`k` and the arrows walk it, Enter edits a field or flips a switch, Save writes what changed to your `shell.json` and the plugin takes it at once, no restart. The hub's Settings row names the adb in use and how it was found.
+**Settings** is a form: the adb binary, the screenshot, recording and APK folders, the extra scrcpy arguments, and the seven switches (mirror with the screen off, keys beside the mirror, notifications, device notifications, confirm uninstall, show system apps, open as a window). Tab, `j`/`k` and the arrows walk it, Enter edits a field or flips a switch, Save writes what changed to your `shell.json` and the plugin takes it at once, no restart. The hub's Settings row names the adb in use and how it was found.
 
 Every action shows its result in the panel and sends a notification with the device's name.
 
@@ -110,6 +114,7 @@ Saved on the plugin's entry in `~/.config/omarchy/shell.json`, from the panel's 
 | `apkDir` | `~/Downloads` | Where the APKs page starts looking. |
 | `scrcpyArgs` | empty | Appended to the scrcpy command line, split on whitespace (`--always-on-top --keyboard=uhid`). |
 | `mirrorScreenOff` | `false` | Mirror with the device's screen off: scrcpy gets `--turn-screen-off --stay-awake`, so the phone stays dark and, plugged in, awake while the mirror runs; the screen comes back when scrcpy closes. |
+| `mirrorKeys` | `true` | The strip of keys beside the scrcpy window (Back, Home, Recents, the volume, Power, Screenshot, Record), following it around. |
 | `notify` | `true` | Desktop notifications for actions and captures. |
 | `deviceNotifications` | `true` | A notification when a device connects, disconnects or needs authorising. |
 | `confirmUninstall` | `true` | Ask before uninstalling an app. |
@@ -138,7 +143,8 @@ omarchy-shell costafot.android-dev flip touches  # animations, touches, pointer,
 omarchy-shell costafot.android-dev dark toggle   # or on, off; fontscale 1.15|next and density 482|reset|next are the other two tweaks
 omarchy-shell costafot.android-dev record start  # stop pulls the mp4 into ~/Videos; toggle does either
 omarchy-shell costafot.android-dev text "hello world"          # typed into the focused field; clipboard sends the clipboard
-omarchy-shell costafot.android-dev scrcpy                      # mirror the selected device
+omarchy-shell costafot.android-dev scrcpy                      # mirror the selected device; the keys strip appears beside the window
+omarchy-shell costafot.android-dev key back                    # press a key on it: back home recents power volup voldown wake sleep
 omarchy-shell costafot.android-dev avd Medium_Phone            # start that emulator; avdcold NAME boots it fresh (-no-snapshot-load)
 omarchy-shell costafot.android-dev logcat com.android.chrome   # adb logcat --pid in a terminal; no package follows everything
 omarchy-shell costafot.android-dev pair start                  # a pairing QR code in the panel; stop cancels it
@@ -208,6 +214,7 @@ bin/omarchy-android-dev record                                          # record
 bin/omarchy-android-dev select emulator-5554 | jq .notice               # with more than one device attached; --serial S does it per call
 bin/omarchy-android-dev apk list ~/Downloads | jq '.apks[].name'        # apk install PATH... installs them in turn
 bin/omarchy-android-dev text send "hello world" | jq .notice            # text clipboard sends the clipboard
+bin/omarchy-android-dev key back | jq .notice                            # input keyevent by name: back home recents power volup voldown wake sleep
 bin/omarchy-android-dev tools | jq '.avds[] | [.name, .detail]'         # tool scrcpy, tool avd NAME [cold], tool avd-stop SERIAL, tool logcat [PKG]
 bin/omarchy-android-dev wireless | jq '{mdns, services}'                # the pairing and connect services on the network
 bin/omarchy-android-dev pair qr                                         # prints the PNG's path, waits for the phone to scan it; Ctrl-C cancels

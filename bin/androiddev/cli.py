@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 
-from . import PLUGIN_ID, actions, adb as adbmod, apk as apkmod, capture, devices as devmod, fmt, packages as pkgmod, plugin_version, text as textmod, toggles as togmod, tools as toolsmod, tweaks as twmod, wireless as wlmod
+from . import PLUGIN_ID, actions, adb as adbmod, apk as apkmod, capture, devices as devmod, fmt, keys as keysmod, packages as pkgmod, plugin_version, text as textmod, toggles as togmod, tools as toolsmod, tweaks as twmod, wireless as wlmod
 from .adb import Adb, AdbError, PartialError
 from .state import State
 
@@ -33,6 +33,7 @@ SETTING_DEFAULTS = {
     "apkDir": "~/Downloads",
     "scrcpyArgs": "",
     "mirrorScreenOff": False,
+    "mirrorKeys": True,
     "notify": True,
     "deviceNotifications": True,
     "confirmUninstall": True,
@@ -62,6 +63,7 @@ HELP = [
     ("apk install PATH...", "adb install -r -t, one file after another"),
     ("text send TEXT", "type TEXT on the device (input text; one line of ASCII)"),
     ("text clipboard", "type the clipboard (wl-paste) on the device"),
+    ("key NAME", "press a hardware key (input keyevent): back home recents power volup voldown wake sleep"),
     ("tools", "scrcpy, emulator and terminal found or not; the AVDs with Running or Stopped"),
     ("tool scrcpy", "mirror the selected device (scrcpy -s SERIAL --window-title, --turn-screen-off --stay-awake with mirrorScreenOff, plus scrcpyArgs)"),
     ("tool avd NAME [cold]", "start that AVD (refused while it runs); `cold` boots it fresh instead of resuming its snapshot (-no-snapshot-load)"),
@@ -470,6 +472,13 @@ def _device_label(ctx, serial):
     return next((d["label"] for d in (ctx._devices or []) if d["serial"] == serial), serial)
 
 
+def cmd_key(ctx, args):
+    if len(args) != 1 or args[0] not in keysmod.NAMES:
+        raise BadArgs("key " + "|".join(keysmod.NAMES))
+    adb, serial = ctx.device()
+    return keysmod.press(adb, serial, args[0])
+
+
 def cmd_tools(ctx, args):
     """What is installed and the AVDs. Works without adb (nothing is
     Running then, and `no_adb` rides in the envelope)."""
@@ -632,6 +641,7 @@ COMMANDS = {
     "tweak": cmd_tweak,
     "apk": cmd_apk,
     "text": cmd_text,
+    "key": cmd_key,
     "tools": cmd_tools,
     "tool": cmd_tool,
     "wireless": cmd_wireless,

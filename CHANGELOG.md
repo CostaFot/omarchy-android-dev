@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.11.0
+
+The keys beside the mirror (board issue COS-86).
+
+- Added: a strip of the phone's keys drawn along the scrcpy window's right edge while a mirror is up, following it as it is dragged, resized, tiled or moved, and going with it when its workspace is switched away or the window closes: Back, Home, Recents, Volume up, Volume down, Power, then Screenshot and Record (red while a recording runs). scrcpy has the keys as Mod shortcuts and shows nothing on screen; the strip never takes keyboard focus, so typing into the mirror keeps working with it there. The keys go to the selected device (the one *Mirror with scrcpy* started for). The *Keys beside the mirror* setting (`mirrorKeys`, on) turns it off.
+- Added: the helper's `key NAME` (`input keyevent` by name: `back home recents power volup voldown wake sleep`) and the IPC verb `key NAME` for a keybinding; `status` carries `mirror` (whether a mirror window is up, where it is, where the strip sits).
+- Tests: 253.
+
 ## 1.10.0
 
 The Tweaks page (board issue COS-84).

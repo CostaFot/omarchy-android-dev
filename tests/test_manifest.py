@@ -188,6 +188,37 @@ class ManifestMatchesTheQml(unittest.TestCase):
         self.assertIn('root.act(["tweak", "dark", m])', self.service)
         self.assertIn('root.act(["tweak", "density", "reset"])', self.service)
 
+    def test_the_mirror_keys_are_wired(self):
+        # 1.11.0: the strip beside the scrcpy window (MirrorKeys.qml, owned
+        # by the service, off with the `mirrorKeys` setting): a layer-shell
+        # window that never takes keyboard focus, matched to the mirror by
+        # the title `tool scrcpy` sets and scrcpy's app id (the plugin's own
+        # window shares the title), polling Hyprland's client list while a
+        # mirror is up because a drag sends no event; every key is one
+        # `key NAME` run, and the verb's names are the helper's.
+        from androiddev import keys
+        strip = read("MirrorKeys.qml")
+        self.assertIs(SETTING_DEFAULTS["mirrorKeys"], True)
+        self.assertIn('flag("mirrorKeys", true)', self.store)
+        self.assertIn("MirrorKeys {", self.service)
+        self.assertIn("keysEnabled: root.store.mirrorKeys", self.service)
+        self.assertEqual(js_literal(self.service, "keyNames", "]"), keys.NAMES)
+        self.assertIn("function key(name: string): string { return root.pressKey(name) }", self.service)
+        self.assertIn('return act(["key", n], function(doc)', self.service)
+        self.assertRegex(self.service, r'"  key NAME\s')
+        self.assertIn("mirror: mirrorKeys.statusObject()", self.service)
+        self.assertIn("WlrLayershell.keyboardFocus: WlrKeyboardFocus.None", strip)
+        self.assertIn("exclusionMode: ExclusionMode.Ignore", strip)
+        self.assertIn('readonly property string mirrorTitle: "Android Dev"', strip)
+        self.assertIn('readonly property string mirrorAppId: "scrcpy"', strip)
+        self.assertIn("Hyprland.refreshToplevels()", strip)
+        for name in ("back", "home", "recents", "volup", "voldown", "power", "screenshot", "record"):
+            self.assertIn(f'key: "{name}"', strip, name)
+        self.assertNotIn('key: "wake"', strip)
+        self.assertNotIn("Process {", strip)
+        self.assertIn("--window-title", read("bin/androiddev/tools.py"))
+        self.assertIn('id: mirrorKeysToggle', self.panel)
+
     def test_help_names_every_setting(self):
         for key in SETTING_DEFAULTS:
             self.assertIn(key, self.service, key)

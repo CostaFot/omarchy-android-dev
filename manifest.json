@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "costafot.android-dev",
   "name": "Android Dev",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "author": "CostaFot",
   "license": "MIT",
-  "description": "The Android developer's side of a device, on the bar: adb devices, packages and their actions, developer toggles, dark mode and the display scales, screenshots, deep links, APKs, the emulator, scrcpy and logcat, wireless debugging.",
+  "description": "The Android developer's side of a device, on the bar: adb devices, packages and their actions, developer toggles, dark mode and the display scales, screenshots, deep links, APKs, the emulator, scrcpy with the phone's keys beside it, logcat, wireless debugging.",
   "kinds": [
     "service",
     "bar-widget",
@@ -35,6 +35,7 @@
       "apkDir": "~/Downloads",
       "scrcpyArgs": "",
       "mirrorScreenOff": false,
+      "mirrorKeys": true,
       "notify": true,
       "deviceNotifications": true,
       "confirmUninstall": true,
@@ -83,6 +84,13 @@
         "label": "Mirror with the screen off",
         "description": "scrcpy turns the device's screen off and keeps it awake while mirroring (--turn-screen-off --stay-awake).",
         "defaultValue": false
+      },
+      {
+        "key": "mirrorKeys",
+        "type": "boolean",
+        "label": "Keys beside the mirror",
+        "description": "A strip of the phone's keys (Back, Home, Recents, the volume, Power, Screenshot, Record) drawn next to the scrcpy window, following it around.",
+        "defaultValue": true
       },
       {
         "key": "notify",

@@ -8,7 +8,8 @@ import Quickshell.Io
 // documents), the device tracker (one `omarchy-android-dev track` process,
 // restarted with backoff), the screen recorder (one `record` process while
 // a recording runs), the pairer (one `pair qr` process while a pairing
-// code is up), the device notifications and the plugin's IPC target. Bar
+// code is up), the strip of keys beside the scrcpy window (MirrorKeys.qml),
+// the device notifications and the plugin's IPC target. Bar
 // widgets register themselves as hosts; the first one lends its settings
 // (the shell injects settings only into bar widgets) and the popup verbs
 // route through the bar's own summon/hide, which picks the widget on the
@@ -352,6 +353,33 @@ Item {
   function stopPairing() { return pairer.stop() ? "stopping" : "not pairing" }
   function togglePairing() { return pairer.running ? stopPairing() : startPairing() }
 
+  // ---- The keys beside the mirror ----------------------------------------
+  // MirrorKeys.qml: a strip of the phone's keys along the scrcpy window's
+  // edge while one is up (the `mirrorKeys` setting). Each key is one
+  // silent helper run (`key NAME`; the mirror shows the result, a failure
+  // gets a notification), and `key NAME` is the IPC verb for a keybinding.
+  readonly property var keyNames: ["back", "home", "recents", "power", "volup", "voldown", "wake", "sleep"]
+
+  MirrorKeys {
+    id: mirrorKeys
+    service: root
+    keysEnabled: root.store.mirrorKeys
+  }
+
+  readonly property bool mirrorPresent: mirrorKeys.mirror !== null
+  readonly property bool mirrorKeysShown: mirrorKeys.shown
+
+  function pressKey(name) {
+    var n = String(name || "").trim().toLowerCase()
+    if (keyNames.indexOf(n) === -1) return "key takes one of: " + keyNames.join(" ")
+    return act(["key", n], function(doc) {
+      if (doc && doc.ok === false && store.notifyEnabled && store.lastError !== "") {
+        var dev = store.selectedDevice
+        notify(store.lastError, dev ? dev.label : "")
+      }
+    }, true)
+  }
+
   // omarchy-notification-send as argv, fire and forget. Device labels are
   // one argument each, never a shell string.
   function notify(headline, body) {
@@ -607,6 +635,7 @@ Item {
       recording: { active: recording, stopping: recordingStopping, seconds: recordingSeconds, device_path: recordingDevicePath },
       pairing: { active: pairing, stopping: pairingStopping, seconds: pairingSeconds, window: pairingWindow, qr_path: pairingQr, name: pairingName },
       hosts: hosts.length,
+      mirror: mirrorKeys.statusObject(),
       opened: opened,
       page: opened ? panelPage : "",
       window: { opened: isWindowOpen(), page: isWindowOpen() ? windowPage : "", size: isWindowOpen() && windowHost && windowHost.windowSize ? windowHost.windowSize : null }
@@ -619,7 +648,7 @@ Item {
     "  open | close | toggle  the panel, or the window with the openAsWindow setting on (show/hide are aliases)",
     "  page NAME            open the panel on a page: hub devices packages deeplink toggles tweaks capture apks text tools wireless settings",
     "  window open|close|toggle|PAGE  the same pages as their own window (a toplevel Hyprland tiles or floats); a page name opens it there; explicit whatever the setting",
-    "  status               one JSON line: adb, settings, devices, tracker, recording, pairing, the open page, the window, errors",
+    "  status               one JSON line: adb, settings, devices, tracker, recording, pairing, the open page, the window, the mirror, errors",
     "  devices              one JSON line: the attached devices",
     "  select SERIAL        make SERIAL the selected device",
     "  launch PKG           start PKG's launcher activity on the selected device (the one picked on its page when it has several)",
@@ -634,6 +663,7 @@ Item {
     "  density DPI|reset|next  the display density (wm density 482), back to the physical one, or the next Display size step",
     "  text TEXT            type TEXT on the selected device (input text: one line of ASCII)",
     "  clipboard            type the clipboard (wl-paste) on the selected device",
+    "  key NAME             press a hardware key on the selected device: back home recents power volup voldown wake sleep (the strip beside the mirror has the first six)",
     "  scrcpy               mirror the selected device with scrcpy",
     "  avd NAME             start that emulator (refused while it runs)",
     "  avdcold NAME         the same with a cold boot: -no-snapshot-load, the saved snapshot is not resumed",
@@ -643,7 +673,7 @@ Item {
     "  refresh              re-read adb and the device list",
     "Action verbs return at once; the result arrives as a notification and in the panel.",
     "Settings: the panel's Settings page, or `omarchy bar set costafot.android-dev KEY VALUE` (adbPath screenshotDir",
-    "recordingDir apkDir scrcpyArgs mirrorScreenOff notify deviceNotifications confirmUninstall showSystemApps openAsWindow); both apply at once."
+    "recordingDir apkDir scrcpyArgs mirrorScreenOff mirrorKeys notify deviceNotifications confirmUninstall showSystemApps openAsWindow); both apply at once."
   ]
 
   //   omarchy-shell costafot.android-dev help
@@ -731,6 +761,7 @@ Item {
       return root.act(["text", "send", t])
     }
     function clipboard(): string { return root.act(["text", "clipboard"]) }
+    function key(name: string): string { return root.pressKey(name) }
     function scrcpy(): string { return root.act(["tool", "scrcpy"]) }
     function avd(name: string): string {
       var n = root.validAvd(name)

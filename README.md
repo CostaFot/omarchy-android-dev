@@ -2,7 +2,7 @@
 
 <img src="preview.png" width="900" alt="the droid in the bar, the hub, a package's actions and the developer toggles">
 
-A companion plugin for the typical stuff an Android developer does on the day to day. Although mainly targetted for devs, you might find it does a lot of cool shit a typical user might like :) 
+A companion plugin for the typical stuff an Android developer does on the day-to-day. Although mainly targetted for devs, you might find it does a lot of cool stuff you might like as an android power user.
 
 This first started as a port of another app I made for Windows -- [ADB Extension for Command Palette](https://github.com/CostaFot/AdbExtension) but then it escalated.
 

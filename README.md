@@ -91,6 +91,8 @@ A package with more than one launcher activity (a debug build with LeakCanary, s
 
 ### Deep link
 
+The bane of all existence.
+
 <img src="assets/screenshots/deeplink.png" width="300" alt="the deep link page with the typed URL and the recent links">
 
 Type a URL or a custom scheme, Enter fires it (`am start -a android.intent.action.VIEW -d URL`). The last ten sit under *Recent*.
@@ -113,16 +115,16 @@ The developer toggles with their current state read from the device. Enter flips
 * Bluetooth
 * Demo mode
 
-Demo mode is Android's clean status bar for screenshots: clock at 12:00, full battery, full signal, no notification icons. Vendor skins honour it in part. My HONOR phone took the battery and the notification icons but kept its real clock and signal bars.
+Demo mode is Android's clean status bar for screenshots/demos: clock at 12:00, full battery, full signal, no notification icons. My HONOR phone took the battery and the notification icons but kept its real clock and signal bars. Yours might be different, you never know with these OEMs.
 
 ### Tweaks
 
 <p>
-<img src="assets/screenshots/tweaks.png" width="300" alt="the tweaks page: dark mode, font scale, display scale">
 <img src="assets/screenshots/tweaks-display.png" width="300" alt="the display scale picker with Android's steps">
+<img src="assets/screenshots/tweaks.png" width="300" alt="the tweaks page: dark mode, font scale, display scale">
 </p>
 
-The display settings you keep flipping while checking a UI: Dark mode, Font scale and Display scale.
+The most common display settings one keeps flipping while checking a UI: Dark mode, Font scale and Display scale.
 
 * Enter on Dark mode flips it (`cmd uimode night`)
 * Enter on a scale opens a picker with Android's own steps, Small to Largest, a check on the current one
@@ -151,7 +153,7 @@ The folders follow Omarchy's own (`OMARCHY_SCREENSHOT_DIR`, `OMARCHY_SCREENRECOR
 <img src="assets/screenshots/apks-installed.png" width="300" alt="the same folder after Install all">
 </p>
 
-A folder box, prefilled from the *APK folder* setting (`~/Downloads`), listing the `.apk` files in it as you type.
+Prefilled from the *APK folder* setting (`~/Downloads`)/
 
 * Enter on one installs it (`adb install -r -t`, so a testOnly debug build installs too) and the row says Installed or quotes adb's `Failure [...]`
 * *Install all* runs them one after another with one notification for the batch
@@ -173,9 +175,7 @@ Android's `input text` does one line of ASCII, so anything else is refused rathe
 * *Logcat* for the package you last opened, in your default terminal (`adb logcat --pid=…`, so the app has to be running)
 * one row per emulator AVD, Running or Stopped. Enter on a stopped one asks for a *Quick boot* or a *Cold boot* (`-no-snapshot-load`, for when a snapshot misbehaves). Enter on a running one stops it, after a confirm
 
-Whatever this page launches is yours to close. The plugin never kills it.
-
-### The keys beside the mirror
+### Extra controls for mirrored devices
 
 <img src="assets/screenshots/mirror-keys.png" width="320" alt="the strip of keys along the scrcpy window's right edge">
 
@@ -183,41 +183,43 @@ While a scrcpy window is up, a strip of the phone's keys sits along its right ed
 
 scrcpy has these as Mod shortcuts and shows nothing on screen. The strip is a click each and never takes keyboard focus, so typing into the mirror keeps working.
 
-It goes with the mirror when the window closes or you switch workspace, moves to the left edge when the right one runs off the monitor and steps aside for a fullscreen mirror. The *Keys beside the mirror* setting turns it off.
+The *Keys beside the mirror* setting turns it off if you don't like it.
 
 ### Wireless
 
 <p>
-<img src="assets/screenshots/wireless.png" width="300" alt="the wireless page: the two ways to pair, the Wi-Fi devices, the phones seen on the network">
 <img src="assets/screenshots/wireless-qr.png" width="300" alt="the wireless page while a pairing code is shown">
+<img src="assets/screenshots/wireless.png" width="300" alt="the wireless page: the two ways to pair, the Wi-Fi devices, the phones seen on the network">
 </p>
 
-Gets a phone onto Wi-Fi debugging, two ways.
+Gets a phone onto Wi-Fi debugging. I always found Wi-Fi debugging finnicky in general so I tried to sort out a lot of the roadblocks I encountered throughout the years with VPN shenanigans and all that.
 
 * *Pair with a QR code* shows a code in the panel. On the phone: Developer options › Wireless debugging › *Pair device with QR code*, and scan it from there, **nowhere else**. The code is a Wi-Fi-credential string by format and a camera app would try to join a network that doesn't exist. The plugin waits up to two minutes and pairs
 * *Pair with a code* is for the phone's *Pair device with pairing code* dialog. While that dialog is open the phone announces its pairing address and the page lists it, so Enter takes the address and you only type the six digits. The address can be typed too, for an adb without mDNS
 
 After that adb connects on its own whenever the phone's Wireless debugging is on. Android picks a new port every time it's toggled and adb finds it through mDNS, so nothing to type again.
 
-A paired phone that's on the network but not connected shows under *Seen on the network*, Enter connects it. Each Wi-Fi entry has Disconnect. A phone over Wi-Fi mirrors, records and does every other page like a plugged one.
+A paired phone that's on the network but not connected shows under *Seen on the network*. A phone over Wi-Fi mirrors, records and does every other page like a plugged one.
 
-The old cable-first way, `adb tcpip 5555`, isn't on the page. The helper keeps `tcpip` and `usb` for the terminal.
+The old cable-first way, `adb tcpip 5555`, isn't on the page since I don't think it's that useful tbh. The helper keeps `tcpip` and `usb` for the terminal.
 
-When a VPN interface is up on this machine the page says so at the foot: a VPN that isolates the LAN is the usual reason nothing on Wi-Fi ever answers. A connect or a pairing that times out names it too.
+When a VPN interface is up on this machine the page says so at the bottom of the page: a VPN that isolates the LAN is the usual reason nothing on Wi-Fi ever answers. A connect or a pairing that times out names it too.
 
 ### Settings
 
 <img src="assets/screenshots/settings.png" width="300" alt="the settings form">
 
-A form: the adb binary, the screenshot, recording and APK folders, the extra scrcpy arguments, and seven switches. Tab, `j`/`k` and the arrows walk it, Enter edits a field or flips a switch, Save writes what changed to your `shell.json` and the plugin takes it at once. No restart.
+The adb binary, the screenshot, recording and APK folders, the extra scrcpy arguments, and seven switches. 
+
+Save writes what changed to your `shell.json` and the plugin takes it at once so not restart needed.
 
 Every action shows its result in the panel and sends a notification with the device's name.
 
-## The window
+## Optional window mode
 
 <img src="assets/screenshots/window.png" width="300" alt="the hub as its own window, floated by the rule below">
 
-The same pages as a normal window, for when the panel should stay put: next to the mirror, on its own workspace, wherever.
+The same plugin pages can be shows as a persistent window, for when the panel should stay put: next to the mirror, on its own workspace. I prefer it that way myself but thought people are too used to plugin floating panels by now.
 
 * `omarchy-shell costafot.android-dev window toggle` opens and closes it. `open`, `close` or a page name (`window toggles`) work too
 * it's a Wayland toplevel titled `Android Dev`, class `org.quickshell`, so Hyprland tiles or floats it like any app
@@ -231,6 +233,7 @@ Prefer the window as the one-key surface? Turn *Open as a window* on. The glyph'
 Saved on the plugin's entry in `~/.config/omarchy/shell.json`, from the panel's Settings page or with `omarchy bar set costafot.android-dev KEY VALUE` (`--json` for a boolean, the plain word works too). Picked up at once either way.
 
 | Key | Default | What it does |
+|---|---|---|
 | `adbPath` | empty | The adb binary, or the folder holding it. Empty looks in `$ANDROID_HOME` or `$ANDROID_SDK_ROOT`, then `~/Android/Sdk/platform-tools`, then `PATH`. A path that holds no adb is reported on the hub, not silently replaced. |
 | `screenshotDir` | empty | Where screenshots go. Empty uses `OMARCHY_SCREENSHOT_DIR`, else your Pictures folder. |
 | `recordingDir` | empty | Where screen recordings go. Empty uses `OMARCHY_SCREENRECORD_DIR`, else your Videos folder. |
@@ -250,7 +253,7 @@ Saved on the plugin's entry in `~/.config/omarchy/shell.json`, from the panel's 
 * a device over USB with USB debugging on, or an emulator, or a phone over Wi-Fi (Android 11 or newer with Wireless debugging on)
 * for the QR way and the pairing address showing up by itself, the SDK's adb (it has mDNS built in, the `android-tools` one doesn't) and `qrencode`, which Omarchy ships
 * the phone and this machine on the same network with nothing in between. A VPN that isolates the LAN (NordVPN with LAN Discovery off, say) leaves you with timeouts
-* optional: the SDK's `emulator` for the AVD rows and the `scrcpy` package for mirroring. The rows appear once they're installed, no restart
+* optional: the SDK's `emulator` for the AVD rows and the `scrcpy` package for mirroring. The rows appear once they're installed
 
 ## From the shell
 
@@ -350,7 +353,7 @@ bin/omarchy-android-dev connect 192.168.1.5 | jq .notice                # discon
 
 Emulators show up by their AVD name, as in `Pixel 10 Pro Fold (emulator-5554)`.
 
-## How it runs
+## The legal bit
 
 * the shell never runs `adb` itself. A Python 3 helper with no dependencies does, with an argument list, a deadline and a size cap on every call, and never through a shell string
 * one device tracker (`adb track-devices`) runs per shell and comes back on its own when adb goes away
@@ -362,29 +365,81 @@ Emulators show up by their AVD name, as in `Pixel 10 Pro Fold (emulator-5554)`.
 
 **Leaves your machine:** nothing beyond your own network. `adb` talks to its own server on `127.0.0.1:5037` and to your device, over USB or to the phone's address on your LAN. adb's mDNS discovery is multicast on that LAN. The plugin makes no network request of its own.
 
+Please read the source code (or have your agent read it)
+
 ## FAQ
 
-**adb is not on my PATH.** It doesn't have to be. The plugin looks in `$ANDROID_HOME` and `$ANDROID_SDK_ROOT`, then `~/Android/Sdk/platform-tools`, then `PATH`, and the hub's Settings row says which one it found. Point `adbPath` at a binary or a folder to be explicit. If that path holds no adb the hub says so instead of quietly using another one.
+### adb is not on my PATH
 
-**The hub says "needs authorising".** The phone is showing the *Allow USB debugging?* prompt. Accept it, tick *Always allow*. No prompt? *Revoke USB debugging authorisations* in the developer options and replug.
+It doesn't have to be. The plugin looks in `$ANDROID_HOME` and `$ANDROID_SDK_ROOT`, then `~/Android/Sdk/platform-tools`, then `PATH`. The hub's Settings row says which one it found.
 
-**Two devices, and it talks to the wrong one.** Enter on the hub's device row opens the picker. The choice is remembered per serial, and when that device is gone and one other is attached, that one is used. Over IPC and from a terminal, `select SERIAL` or `--serial SERIAL` does the same.
+Point `adbPath` at a binary or a folder to be explicit. If that path holds no adb the hub says so instead of quietly using another one.
 
-**Which wireless path do I use?** *Pair with a QR code* once, or with a code when the QR row is missing (that means this adb has no mDNS). After that the phone connects on its own whenever its Wireless debugging is on, cable or not. A phone that didn't come back by itself: toggle its Wireless debugging off and on, or pick it under *Seen on the network*.
+### The hub says "needs authorising"
 
-**It paired, but the phone shows offline or disappeared.** Android drops Wireless debugging when the phone leaves the network or sleeps for long, and picks a new port when it's toggled. Toggle it off and on, then `r` on the Wireless page. The switch can read on while its server is not running (seen on an HONOR phone after a reboot), toggling it is the cure there too. Keep the phone awake while pairing: asleep, it filters the multicast that mDNS runs on and answers nothing. If nothing on Wi-Fi ever works, check for a VPN on either side that isolates the LAN. With NordVPN's LAN Discovery off even a ping to the phone gets nothing back.
+The phone is showing the *Allow USB debugging?* prompt. Accept it, tick *Always allow*.
 
-**Send text refuses my text.** Android's `input text` takes one line of printable ASCII, so accents, emoji and line breaks are refused rather than typed wrong. Apps like ADBKeyboard accept UTF-8 through a broadcast, but that needs an APK on the device and isn't built in.
+*Revoke USB debugging authorisations* in the developer options and replug if you are getting no prompt.
 
-**Typing and taps do nothing on my phone.** Some vendor ROMs block input injection over adb until *USB debugging (Security settings)* is enabled in the developer options. For scrcpy the usual answer is `--keyboard=uhid --mouse=uhid` in the *Extra scrcpy arguments* setting.
+### It talks to the wrong one when I got 2 devices
 
-**The emulator window looks wrong.** The emulator is an X11 program under XWayland (its bundled Qt has no Wayland plugin) and its toolbar is a second window. The two only line up when the main window floats, which the rule above does. On a scaled monitor it renders at 1x and comes out small, and it ignores `QT_SCALE_FACTOR`, so resize the window and the screen scales with it.
+Enter on the hub's device row opens the picker. The choice is remembered per serial, and when that device is gone and one other is attached, that one is used.
 
-**The phone looks huge, or tiny, since I tried Display scale.** A density override is kept across reboots. Tweaks › Display scale › Default (`wm density reset`), or `bin/omarchy-android-dev tweak density reset` from a terminal. The font scale goes back the same way with `tweak font 1.0`.
+Over IPC and from a terminal, `select SERIAL` or `--serial SERIAL` does the same.
 
-**A recording was running when the shell restarted.** The device finishes the file on its own. It stays at `/sdcard/omarchy-android-dev-<stamp>.mp4` and the plugin doesn't pull leftovers: `adb pull` it and remove it by hand.
+### Which wireless path do I use?
 
-**What's different from the Windows extension?** Per-action favourites became the last package per device and the recent deep links. The panel stays open after an action. Installs pass `-t` so debug builds install. A package with only a service process counts as Running. Uninstall asks first, and can be told not to.
+*Pair with a QR code*, once. Just use that, it's easier. Use the code instead when the QR row is missing, which means this adb has no mDNS.
+
+After that the phone connects on its own whenever its Wireless debugging is on, cable or not. If it didn't come back by itself, toggle its Wireless debugging off and on, or pick it under *Seen on the network*.
+
+### It paired, but the phone shows offline or disappeared
+
+Android drops Wireless debugging when the phone leaves the network or sleeps for long, and picks a new port when it's toggled. In order of likelihood:
+
+* toggle Wireless debugging off and on, then `r` on the Wireless page
+* the switch can read on while its server isn't running (seen on my own HONOR phone after a reboot). Toggling it is the cure there too
+* keep the phone awake while pairing. Asleep, it filters the multicast that mDNS runs on and answers nothing
+* if nothing on Wi-Fi ever works, check for a VPN on either side that isolates the LAN. With NordVPN's LAN Discovery off even a ping to the phone gets nothing back
+
+### Send text refuses my text
+
+Android's `input text` takes one line of printable ASCII, so accents, emoji and line breaks are refused rather than typed wrong.
+
+Apps like ADBKeyboard accept UTF-8 through a broadcast, but that needs an APK on the device and isn't built in.
+
+### Typing and taps do nothing on my phone
+
+Some vendor ROMs block input injection over adb until *USB debugging (Security settings)* is enabled in the developer options.
+
+For scrcpy the usual answer is `--keyboard=uhid --mouse=uhid` in the *Extra scrcpy arguments* setting.
+
+### The emulator window looks wrong
+
+The emulator is an X11 program under XWayland (its bundled Qt has no Wayland plugin) and its toolbar is a second window. The two only line up when the main window floats, which the rule above does.
+
+On a scaled monitor it renders at 1x and comes out small. It ignores `QT_SCALE_FACTOR`, so resize the window and the screen scales with it.
+
+### The phone looks huge, or tiny, since I tried Display scale
+
+A density override is kept across reboots. Tweaks › Display scale › Default (`wm density reset`), or from a terminal:
+
+```bash
+bin/omarchy-android-dev tweak density reset
+bin/omarchy-android-dev tweak font 1.0
+```
+
+### A recording was running when the shell restarted
+
+The device finishes the file on its own. It stays at `/sdcard/omarchy-android-dev-<stamp>.mp4` and the plugin doesn't pull leftovers: `adb pull` it and remove it by hand.
+
+### What's different from the Windows extension?
+
+* per-action favourites became the last package per device and the recent deep links
+* the panel stays open after an action
+* installs pass `-t` so debug builds install
+* a package with only a service process counts as Running
+* uninstall asks first, and can be told not to
 
 ## From a coding agent
 
@@ -408,5 +463,3 @@ omarchy plugin update costafot.android-dev
 omarchy plugin remove costafot.android-dev
 rm -rf ~/.local/state/omarchy/costafot.android-dev
 ```
-
-Ideas for later are issues on https://www.costafotiadis.com/board/ under the omarchy-android-dev project.

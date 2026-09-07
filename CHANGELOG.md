@@ -4,7 +4,8 @@
 
 The README in a lighter register: the lead and the bar section by Costa, the rest to match.
 
-- README: every page under *The panel* is its own heading with a short intro and a bullet list instead of one dense paragraph; the window, requirements, *How it runs* and the FAQ shortened the same way. The commands, the settings table and the screenshots are unchanged. Still being edited.
+- README: every page under *The panel* is its own heading with a short intro and a bullet list instead of one dense paragraph; the window, requirements, *How it runs* and the FAQ shortened the same way. The commands, the settings table and the screenshots are unchanged. The FAQ is one heading per question with short answers. Still being edited.
+- `preview.png` puts the three panels over a wave wallpaper (`assets/preview-background.png`) with a drop shadow, instead of the theme's flat dark.
 
 ## 1.12.1
 

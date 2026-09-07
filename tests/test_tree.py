@@ -164,7 +164,7 @@ class NoCapabilityTokenInTheTree(unittest.TestCase):
     def test_the_tree_is_what_git_tracks(self):
         names = [os.path.relpath(p, ROOT) for p in tracked_text_files()]
         for must in ("manifest.json", "README.md", "LICENSE", "CHANGELOG.md", "AGENTS.md", "Service.qml", "BarWidget.qml",
-                     "Panel.qml", "Store.qml", "bin/omarchy-android-dev"):
+                     "Panel.qml", "Pages.qml", "Window.qml", "Store.qml", "bin/omarchy-android-dev"):
             self.assertIn(must, names)
         self.assertFalse([n for n in names if n.startswith("apks/") or "__pycache__" in n], "junk is tracked")
 

@@ -2,22 +2,24 @@
   "schemaVersion": 1,
   "id": "costafot.android-dev",
   "name": "Android Dev",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "author": "CostaFot",
   "license": "MIT",
   "description": "The Android developer's side of a device, on the bar: adb devices, packages and their actions, developer toggles, screenshots, deep links, APKs, the emulator, scrcpy and logcat, wireless debugging.",
   "kinds": [
     "service",
-    "bar-widget"
+    "bar-widget",
+    "panel"
   ],
   "keepLoaded": true,
   "entryPoints": {
     "service": "Service.qml",
-    "barWidget": "BarWidget.qml"
+    "barWidget": "BarWidget.qml",
+    "panel": "Window.qml"
   },
   "barWidget": {
     "displayName": "Android Dev",
-    "description": "adb for the Android developer: devices, packages, toggles, screenshots, APKs, emulators. Click for the panel.",
+    "description": "adb for the Android developer: devices, packages, toggles, screenshots, APKs, emulators. Click for the panel; the same pages open as a window too.",
     "category": "Development",
     "aliases": [
       "adb",

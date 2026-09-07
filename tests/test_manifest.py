@@ -1,9 +1,10 @@
 """manifest.json is the one place the settings are declared. The helper
 (cli.SETTING_DEFAULTS), the store (Store.qml helperSettingKeys) and the
-Settings page (Panel.qml settingsDefaults) each repeat the list by hand;
+Settings page (Pages.qml settingsDefaults) each repeat the list by hand;
 these tests tie the copies together so a drift fails here, not in a
-user's bar. The IPC help text is pinned to the panel's page list the same
-way."""
+user's bar. The IPC help text and the service's page list are pinned to
+the pages' own list the same way, and the window entry point to its
+kind."""
 
 import json
 import os
@@ -52,7 +53,7 @@ class ManifestMatchesTheHelper(unittest.TestCase):
 
 class ManifestMatchesTheQml(unittest.TestCase):
     def setUp(self):
-        self.panel = read("Panel.qml")
+        self.panel = read("Pages.qml")
         self.store = read("Store.qml")
         self.service = read("Service.qml")
 
@@ -62,7 +63,7 @@ class ManifestMatchesTheQml(unittest.TestCase):
 
     def test_panel_defaults_are_the_manifest_defaults(self):
         m = re.search(r"settingsDefaults:\s*\(\{(.*?)\}\)", self.panel, re.S)
-        self.assertIsNotNone(m, "Panel.qml has no settingsDefaults literal")
+        self.assertIsNotNone(m, "Pages.qml has no settingsDefaults literal")
         literal = "{" + re.sub(r"(\w+)\s*:", r'"\1":', m.group(1)) + "}"
         self.assertEqual(json.loads(literal), WIDGET["defaults"])
 
@@ -82,6 +83,41 @@ class ManifestMatchesTheQml(unittest.TestCase):
         self.assertIsNotNone(m, "Service.qml help has no page line")
         self.assertEqual(m.group(1).split(), pages)
         self.assertIn("settings", pages)
+
+    def test_the_window_verb_takes_the_same_pages(self):
+        # `window PAGE` checks the name in the service (the window may not
+        # have registered yet); the list is the pages' own.
+        pages = js_literal(self.panel, "ipcPages", "]")
+        self.assertEqual(js_literal(self.service, "pageNames", "]"), pages)
+        self.assertIn("function window(mode: string): string", self.service)
+        self.assertRegex(self.service, r'"  window open\|close\|toggle\|PAGE')
+
+    def test_the_window_is_the_panel_kind(self):
+        # The pages as a toplevel: the `panel` kind with Window.qml as its
+        # entry point, which the shell's panel loader creates and hands the
+        # service (kinds must keep `bar-widget` and `service` beside it).
+        self.assertEqual(MANIFEST["kinds"], ["service", "bar-widget", "panel"])
+        self.assertEqual(MANIFEST["entryPoints"]["panel"], "Window.qml")
+        for kind, entry in (("service", "Service.qml"), ("barWidget", "BarWidget.qml"), ("panel", "Window.qml")):
+            self.assertEqual(MANIFEST["entryPoints"][kind], entry)
+            self.assertTrue(os.path.isfile(os.path.join(ROOT, entry)), entry)
+        self.assertIs(MANIFEST["keepLoaded"], True)
+        window = read("Window.qml")
+        self.assertIn("FloatingWindow {", window)
+        self.assertIn('title: "Android Dev"', window)
+        # Both hosts show the one component.
+        self.assertIn("Pages {", window)
+        self.assertIn("Pages {", read("Panel.qml"))
+
+    def test_the_pages_live_once(self):
+        # The refactor that made the window possible: Panel.qml is the popup
+        # wrapper and Pages.qml the content; a page renderer in either host
+        # is the drift this pins.
+        popup = read("Panel.qml")
+        for fn in ("hubRows", "packageRows", "toggleRows", "wirelessRows", "saveSettings"):
+            self.assertIn(f"function {fn}(", self.panel, fn)
+            self.assertNotIn(f"function {fn}(", popup, fn)
+            self.assertNotIn(f"function {fn}(", read("Window.qml"), fn)
 
     def test_ipc_has_no_go_wireless_verbs(self):
         # Go wireless and Back to USB left the panel and the IPC surface in

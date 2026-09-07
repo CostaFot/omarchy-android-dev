@@ -85,6 +85,12 @@ It opens on a hub: the selected device with its state, then the pages. Every pag
 
 Every action shows its result in the panel and sends a notification with the device's name.
 
+## The window
+
+<img src="assets/screenshots/window.png" width="300" alt="the hub as its own window, floated by the rule below">
+
+The same pages as a normal window, for when the panel should stay put: next to the mirror, on its own workspace, under a window rule. `omarchy-shell costafot.android-dev window toggle` opens it and closes it again (`open` and `close` do one or the other; a page name, `window toggles`, opens it on that page). It is a Wayland toplevel titled `Android Dev`, class `org.quickshell`, that Hyprland tiles or floats like any app, resizable, with ordinary keyboard focus: the same keys as the popup, Escape on the hub or the close button closes it. The popup stays the one-key panel; the two can be open at once and show the same device.
+
 ## Settings
 
 Saved on the plugin's entry in `~/.config/omarchy/shell.json`, from the panel's Settings page or with `omarchy bar set costafot.android-dev KEY VALUE` (`--json` for a boolean; the plain word works too). Either way the plugin picks them up at once.
@@ -117,6 +123,7 @@ omarchy-shell costafot.android-dev status | jq   # adb, devices, the tracker, th
 omarchy-shell costafot.android-dev screenshot    # saved, on the clipboard, with a notification
 omarchy-shell costafot.android-dev select emulator-5554
 omarchy-shell costafot.android-dev page packages # open the panel on a page: hub, devices, packages, deeplink, toggles, capture, apks, text, tools, wireless, settings
+omarchy-shell costafot.android-dev window toggle # the same pages as their own window; open, close, or a page name (window toggles) work too
 omarchy-shell costafot.android-dev launch com.android.chrome   # forcestop and clear take a package too
 omarchy-shell costafot.android-dev deeplink https://example.com
 omarchy-shell costafot.android-dev flip touches  # animations, touches, pointer, layout, airplane, wifi, data, bluetooth, demo
@@ -133,17 +140,19 @@ Every verb returns at once; the result arrives as a notification and in the pane
 
 ## Keybindings, the menu and window rules
 
-Omarchy's bindings live in `~/.config/hypr/bindings.lua`. Two lines give the panel and a screenshot a key (`SUPER + ALT + A` and `SUPER + ALT + C` are free in the defaults; pick others if you use them):
+Omarchy's bindings live in `~/.config/hypr/bindings.lua`. Three lines give the panel, the window and a screenshot a key (`SUPER + ALT + A`, `SUPER + ALT + W` and `SUPER + ALT + C` are free in the defaults; pick others if you use them):
 
 ```lua
 o.bind("SUPER + ALT + A", "Android Dev panel", "omarchy-shell costafot.android-dev toggle")
+o.bind("SUPER + ALT + W", "Android Dev window", "omarchy-shell costafot.android-dev window toggle")
 o.bind("SUPER + ALT + C", "Android screenshot", "omarchy-shell costafot.android-dev screenshot")
 ```
 
-The same two as classic Hyprland config lines, for a `bindings.conf`:
+The same three as classic Hyprland config lines, for a `bindings.conf`:
 
 ```
 bindd = SUPER ALT, A, Android Dev panel, exec, omarchy-shell costafot.android-dev toggle
+bindd = SUPER ALT, W, Android Dev window, exec, omarchy-shell costafot.android-dev window toggle
 bindd = SUPER ALT, C, Android screenshot, exec, omarchy-shell costafot.android-dev screenshot
 ```
 
@@ -162,6 +171,12 @@ o.window({ class = "^(scrcpy)$", title = "^(Android Dev)$" }, { float = true, ce
 ```
 
 Floated, the emulator takes its phone shape with the toolbar attached to its right edge, and it reopens where you last dragged it (it remembers its own position, so `center` would do nothing for it). scrcpy opens centred.
+
+The plugin's own window tiles by default. A third rule floats it phone-sized, so it can sit beside the mirror; without a rule it takes a tile like any app and the lists scroll inside it:
+
+```lua
+o.window({ class = "^(org.quickshell)$", title = "^(Android Dev)$" }, { float = true, size = { 420, 760 } })
+```
 
 ## From a terminal
 

@@ -8,11 +8,14 @@ import Quickshell.Io
 // documents), the device tracker (one `omarchy-android-dev track` process,
 // restarted with backoff), the screen recorder (one `record` process while
 // a recording runs), the pairer (one `pair qr` process while a pairing
-// code is up), the device notifications and the plugin's IPC target. Bar widgets register themselves as hosts; the first one lends
-// its settings (the shell injects settings only into bar widgets) and the
-// panel verbs route through the shell's own summon/hide, which picks the
-// widget on the focused monitor (`page NAME` too: the page waits here for
-// whichever widget the shell opens).
+// code is up), the device notifications and the plugin's IPC target. Bar
+// widgets register themselves as hosts; the first one lends its settings
+// (the shell injects settings only into bar widgets) and the popup verbs
+// route through the bar's own summon/hide, which picks the widget on the
+// focused monitor (`page NAME` too: the page waits here for whichever
+// widget the bar opens). The window (Window.qml, the plugin's `panel`
+// kind) registers here too; its verbs go through the shell's summon/hide,
+// which own that loader.
 Item {
   id: root
 
@@ -49,6 +52,12 @@ Item {
     for (var i = 0; i < hosts.length; i++) if (hosts[i] !== widget) next.push(hosts[i])
     hosts = next
   }
+
+  // The window (one per shell, the shell's panel loader keeps it), for
+  // `status` and the `window` verb's page.
+  property var windowHost: null
+  function registerWindow(w) { windowHost = w }
+  function unregisterWindow(w) { if (windowHost === w) windowHost = null }
 
   readonly property Store store: Store {
     pluginDir: root.pluginDir
@@ -454,35 +463,41 @@ Item {
   }
 
   // ---- Panel routing ---------------------------------------------------------
-  // The shell's summon/hide pick the widget on the focused monitor; with
-  // no bar widget placed there is nothing to open.
+  // The bar's summonBarWidget/hideBarWidget pick the widget on the focused
+  // monitor (what the shell's own summon did for this plugin before it had
+  // a `panel` kind: with one, the shell's summon/hide own the window
+  // instead, so the popup goes to the bar directly). With no bar widget
+  // placed there is nothing to open.
   readonly property bool opened: {
     for (var i = 0; i < hosts.length; i++) if (hosts[i].opened === true) return true
     return false
   }
 
+  readonly property var barSummoner: shell && shell.bar && typeof shell.bar.summonBarWidget === "function"
+    && typeof shell.bar.hideBarWidget === "function" ? shell.bar : null
+
   function openPanel() {
     if (hosts.length === 0) return "no bar widget placed"
-    if (shell && typeof shell.summon === "function") return shell.summon(pluginId, "") ? "opened" : "no bar widget placed"
+    if (barSummoner) return barSummoner.summonBarWidget(pluginId) ? "opened" : "no bar widget placed"
     host.open()
     return "opened"
   }
 
   function closePanel() {
     if (hosts.length === 0) return "no bar widget placed"
-    if (shell && typeof shell.hide === "function") { shell.hide(pluginId); return "closed" }
+    if (barSummoner) { barSummoner.hideBarWidget(pluginId); return "closed" }
     host.close()
     return "closed"
   }
 
   function togglePanel() { return opened ? closePanel() : openPanel() }
 
-  // `page NAME` with the panel closed goes through the shell's summon like
+  // `page NAME` with the popup closed goes through the bar's summon like
   // `open`, so the widget on the focused monitor answers (before 1.6.1 the
   // first registered widget opened, on whichever monitor it sat). The
-  // summon carries no payload on the bar-widget path, so the page waits
-  // here and the panel that opens takes it (`takePendingPage` from its
-  // `onOpenedChanged`); a summon that opens nothing lets it lapse.
+  // summon carries no payload, so the page waits here and the popup that
+  // opens takes it (`takePendingPage` from its `onOpenedChanged`); a
+  // summon that opens nothing lets it lapse.
   property string pendingPage: ""
   Timer { id: pendingPageExpiry; interval: 3000; onTriggered: root.pendingPage = "" }
   function takePendingPage() {
@@ -499,10 +514,10 @@ Item {
       hosts[i].showPage(String(name))
       return "opened"
     }
-    if (shell && typeof shell.summon === "function") {
+    if (barSummoner) {
       pendingPage = String(name)
       pendingPageExpiry.restart()
-      if (shell.summon(pluginId, "")) return "opened"
+      if (barSummoner.summonBarWidget(pluginId)) return "opened"
       takePendingPage()
       return "no bar widget placed"
     }
@@ -510,6 +525,42 @@ Item {
     host.showPage(String(name))
     return "opened"
   }
+
+  // ---- The window ------------------------------------------------------------
+  // The pages as a toplevel (Window.qml): the shell's panel loader owns it,
+  // so opening and closing go through the shell's summon and hide, the
+  // page in the payload. `window PAGE` moves an open window's page.
+  readonly property var pageNames: ["hub", "devices", "packages", "deeplink", "toggles", "capture", "apks", "text", "tools", "wireless", "settings"]
+
+  function isWindowOpen() {
+    if (windowHost) return windowHost.opened === true
+    return shell && typeof shell.isPluginOpen === "function" ? shell.isPluginOpen(pluginId) === true : false
+  }
+
+  function openWindow(page) {
+    if (!shell || typeof shell.summon !== "function") return "no window: the shell cannot summon it"
+    var payload = page ? JSON.stringify({ page: String(page) }) : ""
+    return shell.summon(pluginId, payload) ? "opened" : "no window: the plugin is not enabled as a panel"
+  }
+
+  function closeWindow() {
+    if (!shell || typeof shell.hide !== "function") return "no window: the shell cannot hide it"
+    shell.hide(pluginId)
+    return "closed"
+  }
+
+  function toggleWindow() { return isWindowOpen() ? closeWindow() : openWindow("") }
+
+  function windowVerb(mode) {
+    var m = String(mode || "").trim().toLowerCase()
+    if (m === "" || m === "toggle") return toggleWindow()
+    if (m === "open" || m === "show") return openWindow("")
+    if (m === "close" || m === "hide") return closeWindow()
+    if (pageNames.indexOf(m) !== -1) return openWindow(m)
+    return "window takes open, close, toggle or a page: " + pageNames.join(" ")
+  }
+
+  readonly property string windowPage: windowHost && windowHost.page !== undefined ? String(windowHost.page) : ""
 
   // The page the open panel shows (the first host's when none is open).
   readonly property string panelPage: {
@@ -540,7 +591,8 @@ Item {
       pairing: { active: pairing, stopping: pairingStopping, seconds: pairingSeconds, window: pairingWindow, qr_path: pairingQr, name: pairingName },
       hosts: hosts.length,
       opened: opened,
-      page: opened ? panelPage : ""
+      page: opened ? panelPage : "",
+      window: { opened: isWindowOpen(), page: isWindowOpen() ? windowPage : "", size: isWindowOpen() && windowHost && windowHost.windowSize ? windowHost.windowSize : null }
     })
   }
 
@@ -549,7 +601,8 @@ Item {
     "  help                 this list",
     "  open | close | toggle  the panel (show/hide are aliases)",
     "  page NAME            open the panel on a page: hub devices packages deeplink toggles capture apks text tools wireless settings",
-    "  status               one JSON line: adb, settings, devices, tracker, recording, pairing, the open page, errors",
+    "  window open|close|toggle|PAGE  the same pages as their own window (a toplevel Hyprland tiles or floats); a page name opens it there",
+    "  status               one JSON line: adb, settings, devices, tracker, recording, pairing, the open page, the window, errors",
     "  devices              one JSON line: the attached devices",
     "  select SERIAL        make SERIAL the selected device",
     "  launch PKG           start PKG's launcher activity on the selected device",
@@ -588,6 +641,7 @@ Item {
     function hide(): string { return root.closePanel() }
     function toggle(): string { return root.togglePanel() }
     function page(name: string): string { return root.showPage(name) }
+    function window(mode: string): string { return root.windowVerb(mode) }
     function status(): string { return root.statusJson() }
     function devices(): string { return JSON.stringify({ devices: root.store.devices, selected: root.store.selected }) }
     function select(serial: string): string {

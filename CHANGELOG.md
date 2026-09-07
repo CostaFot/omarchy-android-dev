@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.0
+
+The panel as its own window (board issue COS-97).
+
+- Added: the same pages open as a normal window. `omarchy-shell costafot.android-dev window` takes `open`, `close`, `toggle` or a page name (`window toggles` opens it on that page, or moves an open one there), and the shell's generic `omarchy-shell shell summon costafot.android-dev '{"page":"toggles"}'` does the same. It is a Wayland toplevel (class `org.quickshell`, title `Android Dev`) that Hyprland tiles or floats like any app, resizable, with ordinary keyboard focus: the same keys as the popup, Escape on the hub closes it (so does the window's close button), and Tab does nothing there (in the popup it switches bar panels). It does not replace the bar popup, which stays the one-key panel, and the bar widget stays the tracker's host and the settings' home. The README has a keybinding line and a window rule that floats it phone-sized, to sit beside the mirror.
+- Changed: the pages live once. `Panel.qml` is the popup wrapper alone (the kit's Panel and KeyboardPanel around the content, sized to the page under the old cap), `Pages.qml` is the content both hosts show (the page stack, the rows, the boxes, the settings form, the confirm dialog, the keys) and `Window.qml` is the window. The manifest gains the `panel` kind with `Window.qml` as its entry point, and the shell keeps the window loaded (`keepLoaded`), hidden until asked for.
+- Changed: with a `panel` kind the shell's own summon and hide route to the window, so the popup verbs (`open`, `close`, `toggle`, `page`) now call the bar's summon directly, the same function the shell used to call for them; they still pick the widget on the focused monitor.
+- `status` carries `window: {opened, page, size}` (`size` is the window's own width and height and the content's, so a rule's `size` can be checked); `opened` and `page` stay the popup's.
+- Tests: 223.
+
 ## 1.6.1
 
 Two small fixes (board issues COS-102 and COS-104).

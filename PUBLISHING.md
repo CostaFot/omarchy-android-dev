@@ -1,8 +1,8 @@
 # Publishing to the Omarchy plugin marketplace
 
-Written 2026-09-08. Status: **not yet listed**; the first submission is
-being filed at v1.12.4 (see the Submission log at the end, which is where
-the issue number goes). This mirrors what was done for `costafot.markets`
+Written 2026-09-08. Status: **submitted, under review**: #5546, filed
+2026-09-08 at `90a7dd2` (v1.12.5); `main` stays parked there until it
+closes (see the Submission log at the end). This mirrors what was done for `costafot.markets`
 (`~/Work/omarchy-markets/PUBLISHING.md`, the short version) and
 `costafot.clippy` (`~/Work/omarchy-inappropriate-clippy/PUBLISHING.md`,
 the long one, with the form's fields and the prior art).
@@ -131,5 +131,8 @@ What a maintainer will read, and what the notes below say up front:
   the work between releases. Running the baseline scanner locally against
   that commit failed closed on `apks-installed.png` (the rule above), so
   v1.12.5 renames the screenshot and is the commit submitted, with the
-  `package-manager` capability above disclosed in the notes. The
+  `package-manager` capability above disclosed in the notes. Filed as
+  **#5546** (https://github.com/omacom/omarchy-plugin-marketplace/issues/5546),
+  Developer Tools, bar + quickshell, suggested tag "android", at
+  `90a7dd27eba5f5350856deae868c5e4155251ae5`. The
   submission issue: see below once filed.

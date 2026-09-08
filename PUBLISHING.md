@@ -156,5 +156,8 @@ so an update to that plugin will meet the rule too.
 - 2026-09-08 07:12 UTC: the maintainer marked #5546 `needs-fixes` over the
   root `AGENTS.md` (the rule above), with the full review of the adb, APK,
   wireless and process surface to follow at the corrected SHA. v1.13.0
-  moves the reference to `docs/reference.md` and is the commit to name in
-  the reply.
+  moves the reference to `docs/reference.md`; tagged and released at
+  `91acdb892a94eb53d7639ae88463b41390c3c2e7`, `main` fast-forwarded onto
+  it, the issue body edited to name that commit (an edit reruns both bots)
+  and a comment left for the maintainer with the diff summary. The full
+  review is theirs from here.

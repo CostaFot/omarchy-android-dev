@@ -443,12 +443,12 @@ The device finishes the file on its own. It stays at `/sdcard/omarchy-android-de
 
 ## From a coding agent
 
-The plugin ships with `AGENTS.md`, the reference an agent needs to configure it or script it: every setting with its type and the `omarchy bar set` form, every IPC verb with its argument shape, the helper's commands and the JSON each one answers, how the popup and the window open, and the constraints that must not be undone. It's the current state, checked against the code before each release.
+The plugin ships with `docs/reference.md`, the reference an agent needs to configure it or script it: every setting with its type and the `omarchy bar set` form, every IPC verb with its argument shape, the helper's commands and the JSON each one answers, how the popup and the window open, and the constraints that must not be undone. It's the current state, checked against the code before each release.
 
-An agent working inside the plugin's folder finds it on its own: Claude Code reads it through `CLAUDE.md`, Codex, opencode and the rest read `AGENTS.md` by convention. From anywhere else, hand it the path:
+Nothing reads it on its own. It's a plain document rather than an `AGENTS.md`, because the marketplace doesn't list a plugin whose installed folder carries a file agents pick up as instructions. Hand it the path:
 
 ```
-Read ~/.config/omarchy/plugins/costafot.android-dev/AGENTS.md, then bind SUPER + ALT + A to the panel and point adbPath at my SDK.
+Read ~/.config/omarchy/plugins/costafot.android-dev/docs/reference.md, then bind SUPER + ALT + A to the panel and point adbPath at my SDK.
 ```
 
 `omarchy-shell costafot.android-dev help` lists the verbs and the settings, `status` answers one JSON line with the settings in force, and `bin/omarchy-android-dev help` does the same for the helper, so an agent can check its own work without opening the panel.

@@ -171,9 +171,23 @@ class NoCapabilityTokenInTheTree(unittest.TestCase):
         bad = [n for n in names if re.search(r"install|installer|setup|uninstall", os.path.basename(n), re.I)]
         self.assertEqual(bad, [])
 
+    def test_no_agent_instruction_file_is_tracked(self):
+        """The marketplace's maintainer refused the first submission (#5546, 2026-09-08) over a root AGENTS.md:
+        the installed folder is the repository cloned whole, and a coding agent opened in or above it reads such a file as
+        instructions nobody reviewed. The reference is docs/reference.md; the session notes are an untracked
+        AGENTS.md, gitignored, so only the tracked names are checked here."""
+        names = subprocess.run(["git", "-C", ROOT, "ls-files", "--cached"],
+                               capture_output=True, text=True, check=True).stdout.split("\n")
+        agent_files = {"agents.md", "claude.md", "claude.local.md", "gemini.md", ".cursorrules",
+                       ".windsurfrules", "copilot-instructions.md"}
+        bad = [n for n in names if os.path.basename(n).lower() in agent_files]
+        self.assertEqual(bad, [])
+        readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
+        self.assertIn("docs/reference.md", readme)
+
     def test_the_tree_is_what_git_tracks(self):
         names = [os.path.relpath(p, ROOT) for p in tracked_text_files()]
-        for must in ("manifest.json", "README.md", "LICENSE", "CHANGELOG.md", "AGENTS.md", "Service.qml", "BarWidget.qml",
+        for must in ("manifest.json", "README.md", "LICENSE", "CHANGELOG.md", "docs/reference.md", "Service.qml", "BarWidget.qml",
                      "Panel.qml", "Pages.qml", "Window.qml", "Store.qml", "bin/omarchy-android-dev"):
             self.assertIn(must, names)
         self.assertFalse([n for n in names if n.startswith("apks/") or "__pycache__" in n], "junk is tracked")

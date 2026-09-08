@@ -9,7 +9,7 @@ A helper that could exit non-zero or print a traceback would be a helper
 that can blank the bar.
 
 Envelope: schema_version, command, ok, error, generated_at, adb{path,
-source}, selected, then the command's own payload. See AGENTS.md for the
+source}, selected, then the command's own payload. See docs/reference.md for the
 per-command shapes.
 """
 

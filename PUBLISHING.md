@@ -108,6 +108,22 @@ What a maintainer will read, and what the notes below say up front:
 - Every QML `Text` is `Text.PlainText`; `preview.png` and the screenshots
   are my own captures.
 
+## What the maintainer's review refuses
+
+The bots are the first gate; a maintainer reads the tree after them and
+applies `needs-fixes` for what the scanner cannot see. Seen on this
+submission and on four others in the same week (2026-09-06 to 2026-09-08,
+the same reviewer): a root `AGENTS.md` in the validated commit. The
+installed folder is the repository cloned whole and the manifest
+has no packaging exclusion, so a coding agent opened in or above it reads
+that file as instructions nobody reviewed. The fix every submitter made is
+the file leaving the tree, and that is this repo's rule since 1.13.0: the
+reference is `docs/reference.md`, the session notes are an untracked
+`AGENTS.md` that `.gitignore` keeps out (with `CLAUDE.md`), and
+`tests/test_tree.py` refuses a tracked agent-instruction file at any depth.
+The same reviewer had listed omarchy-markets with its `AGENTS.md` in place,
+so an update to that plugin will meet the rule too.
+
 ## The form (first submission)
 
 - Category: Developer Tools. Tags: Bar, Quickshell; suggested tag
@@ -134,5 +150,11 @@ What a maintainer will read, and what the notes below say up front:
   `package-manager` capability above disclosed in the notes. Filed as
   **#5546** (https://github.com/omacom/omarchy-plugin-marketplace/issues/5546),
   Developer Tools, bar + quickshell, suggested tag "android", at
-  `90a7dd27eba5f5350856deae868c5e4155251ae5`. The
-  submission issue: see below once filed.
+  `90a7dd27eba5f5350856deae868c5e4155251ae5`. Both bots answered in a
+  minute: validation passed, the baseline `review-required` with the one
+  capability.
+- 2026-09-08 07:12 UTC: the maintainer marked #5546 `needs-fixes` over the
+  root `AGENTS.md` (the rule above), with the full review of the adb, APK,
+  wireless and process surface to follow at the corrected SHA. v1.13.0
+  moves the reference to `docs/reference.md` and is the commit to name in
+  the reply.

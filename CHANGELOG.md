@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.13.0
+
+The reference moves out of the agents' way.
+
+- The reference is `docs/reference.md`; `AGENTS.md` and `CLAUDE.md` are no longer in the tree. The marketplace's maintainer refused the submission over the root `AGENTS.md`: the installed folder is the repository cloned whole, and a coding agent opened in or above it reads such a file as instructions the marketplace never reviewed. The README's *From a coding agent* section hands an agent the new path, and `tests/test_tree.py` refuses a tracked agent-instruction file at any depth.
+
 ## 1.12.5
 
 The screenshot the marketplace could not scan.

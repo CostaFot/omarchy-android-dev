@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "costafot.android-dev",
   "name": "Android Dev",
-  "version": "1.13.0",
+  "version": "1.13.1",
   "author": "CostaFot",
   "license": "MIT",
   "description": "A companion plugin for the typical stuff an Android developer does on the day-to-day: devices, packages, developer toggles, screenshots and recording, APKs, the emulator, scrcpy and wireless debugging.",

@@ -10,6 +10,8 @@ This first started as a port of another app I made for Windows -- [ADB Extension
 omarchy plugin add https://github.com/CostaFot/omarchy-android-dev --enable
 ```
 
+It's also on the [Omarchy plugin marketplace](https://plugins.omarchy.org/plugin.html?id=costafot.android-dev).
+
 Setting it up from a coding agent? See [From a coding agent](#from-a-coding-agent) at the end.
 
 The rest of the readme is mainly targetted at humans who like pretty pictures.

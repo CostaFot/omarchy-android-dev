@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.13.1
+
+The listing, linked from the README.
+
+- The README links the [marketplace listing](https://plugins.omarchy.org/plugin.html?id=costafot.android-dev) under the install command (board issue COS-150). The submission closed on 2026-09-08 and `PUBLISHING.md` records it.
+
 ## 1.13.0
 
 The reference moves out of the agents' way.

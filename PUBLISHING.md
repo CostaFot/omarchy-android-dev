@@ -1,8 +1,9 @@
 # Publishing to the Omarchy plugin marketplace
 
-Written 2026-09-08. Status: **submitted, under review**: #5546, filed
-2026-09-08 at `90a7dd2` (v1.12.5); `main` stays parked there until it
-closes (see the Submission log at the end). This mirrors what was done for `costafot.markets`
+Written 2026-09-08. Status: **listed and verified** at
+https://plugins.omarchy.org/plugin.html?id=costafot.android-dev, from #5546
+at `91acdb8` (v1.13.0); `main` is no longer parked (see the Submission log
+at the end). This mirrors what was done for `costafot.markets`
 (`~/Work/omarchy-markets/PUBLISHING.md`, the short version) and
 `costafot.clippy` (`~/Work/omarchy-inappropriate-clippy/PUBLISHING.md`,
 the long one, with the form's fields and the prior art).
@@ -161,3 +162,11 @@ so an update to that plugin will meet the rule too.
   it, the issue body edited to name that commit (an edit reruns both bots)
   and a comment left for the maintainer with the diff summary. The full
   review is theirs from here.
+- 2026-09-08 23:59 UTC: #5546 closed `approved-and-verified` and `listed`.
+  The publication bot: *Published and verified Android Dev*, at
+  https://omarchyplugins.com/plugin.html?id=costafot.android-dev
+  (`plugins.omarchy.org` serves the same page), verification method
+  `maintainer-reviewed`, which applies to that snapshot and is not a
+  security audit. `main` is free again: the next release goes out the
+  usual way, and the badge reads "Update unverified" until the listing is
+  moved to the new commit.

@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "bridge" as AndroidDevBridge
 
 // Android Dev service: headless, loaded once per shell while the plugin is
 // enabled (`keepLoaded`). Owns the Store (the helper queue and the last
@@ -418,19 +419,31 @@ Item {
     function onSettingsJsonChanged() { root.restartTracker() }
   }
 
+  // Publish for widgets hosted by replacement bars, whose `bar.shell`
+  // facade cannot resolve plugin services (serviceFor() is a deliberate
+  // null stub there). See bridge/Bridge.qml; the host facade stays the
+  // primary path under the stock shell.
+  //
   // Deferred so the first bar widget can register (and lend its settings)
   // before the first helper run; the tracker and that run start together,
   // which is the case the helper's server lock exists for.
-  Component.onCompleted: Qt.callLater(function() {
-    root.store.refreshStatus()
-    root.startTracker()
-  })
+  Component.onCompleted: {
+    AndroidDevBridge.Bridge.service = root
+    Qt.callLater(function() {
+      root.store.refreshStatus()
+      root.startTracker()
+    })
+  }
 
+  // Unpublish so a widget falling back to the bridge never binds to a
+  // dying instance.
+  //
   // Disabling the plugin destroys this item: the tracker (and through it
   // adb track-devices), the recorder and any helper still running go with
   // it. A recording in flight is asked to stop, but the shell kills the
   // process right after, so the mp4 stays on the device (documented).
   Component.onDestruction: {
+    if (AndroidDevBridge.Bridge.service === root) AndroidDevBridge.Bridge.service = null
     stopping = true
     stopTracker()
     recorder.stop()

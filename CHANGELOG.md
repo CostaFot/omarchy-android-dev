@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.13.2
+
+The bar button under a replacement bar.
+
+- Omarchy hands a replacement bar (e.g. ruixen.bar) a `bar.shell` facade whose `serviceFor()` is a deliberate null stub — only the first-party bar may resolve plugin services — and the widget is `visible` only with its service, so under such a bar the button vanished entirely while the service itself kept running. `svc` now falls back to an engine-wide bridge singleton (`bridge/Bridge.qml`, the pattern `palccod.omate`, `omaconnect` and `lgse.sandman` already use): the service publishes itself into it on completion and unpublishes on destruction, and the binding re-evaluates on its own, so a widget that cannot reach its host picks the service up either way. The host-provided path stays primary and the stock bar is unaffected. `docs/reference.md`'s BarWidget bullet follows.
+
 ## 1.13.1
 
 The listing, linked from the README.

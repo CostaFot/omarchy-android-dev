@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Ui
+import "bridge" as AndroidDevBridge
 
 // Bar widget for Android Dev: the droid glyph, the device count when more
 // than one is attached, dimmed with none; red while the selected device
@@ -14,7 +15,18 @@ BarWidget {
   id: root
   moduleName: "costafot.android-dev"
 
-  readonly property var svc: bar && bar.shell ? bar.shell.serviceFor("costafot.android-dev") : null
+  // Primary path: the bar host's scoped facade (service-capable under the
+  // first-party bar). Fallback: the engine-wide bridge singleton --
+  // replacement bars (e.g. ruixen.bar) are handed a facade whose
+  // serviceFor() is a deliberate null stub, so this widget would hide
+  // itself entirely under them. Re-evaluates on its own when the service
+  // publishes (or is torn down). See bridge/Bridge.qml.
+  readonly property var svc: {
+    var viaHost = bar && bar.shell && typeof bar.shell.serviceFor === "function"
+      ? bar.shell.serviceFor("costafot.android-dev")
+      : null
+    return viaHost || AndroidDevBridge.Bridge.service
+  }
   readonly property var store: svc ? svc.store : null
   // nf-fa-android, as an escape so no tool can strip it silently.
   readonly property string glyph: "\uf17b"
